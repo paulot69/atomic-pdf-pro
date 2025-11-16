@@ -1,7 +1,6 @@
 import re
 
 def _roman_to_int(s):
-    """Converts a Roman numeral string to an integer."""
     rom_val = {'I': 1, 'V': 5, 'X': 10, 'L': 50, 'C': 100, 'D': 500, 'M': 1000}
     int_val = 0
     for i in range(len(s)):
@@ -13,44 +12,94 @@ def _roman_to_int(s):
 
 def split_into_chapters(pages_text):
     """
-    Splits the text into chapters based on predefined patterns.
+    Splits the text into chapters by detecting headers for chapters and special sections.
     """
     full_text = "\n".join(pages_text)
+    lines = full_text.splitlines()
 
-    # Regex to find chapter titles (e.g., "Chapter 1", "CAPÍTULO I")
-    chapter_regex = re.compile(
-        r"^(Capítulo|CAPÍTULO|Chapter|CHAPTER)\s+([IVXLCDM]+|[0-9]+)",
-        re.MULTILINE
-    )
+    chapter_patterns = [
+        r'^\s*(Cap[ií]tulo|Chapter)\s+(\d+)\b.*$',
+        r'^\s*(CAP[IÍ]TULO|CHAPTER)\s+(\d+)\b.*$',
+        r'^\s*(Cap\.)\s+(\d+)\b.*$',
+        r'^\s*(Cap[ií]tulo|Chapter)\s+([IVXLCDM]+)\b.*$',
+    ]
 
-    matches = list(chapter_regex.finditer(full_text))
+    special_sections = [
+        r'^\s*Pr[oó]logo\b.*$',
+        r'^\s*Introducci[oó]n\b.*$',
+        r'^\s*Ep[ií]logo\b.*$',
+        r'^\s*Conclusi[oó]n\b.*$',
+        r'^\s*Ap[eé]ndice\b.*$',
+    ]
 
-    if not matches:
+    headers = []
+    for idx, line in enumerate(lines):
+        stripped = line.strip()
+        if not stripped:
+            continue
+
+        # Check for numbered chapters
+        is_chapter = False
+        for pat in chapter_patterns:
+            m = re.match(pat, stripped, re.IGNORECASE)
+            if m:
+                headers.append({
+                    "idx": idx,
+                    "kind": "chapter",
+                    "raw_title": stripped,
+                    "number_token": m.group(2),
+                })
+                is_chapter = True
+                break
+        if is_chapter:
+            continue
+
+        # Check for special sections
+        for pat in special_sections:
+            if re.match(pat, stripped, re.IGNORECASE):
+                headers.append({
+                    "idx": idx,
+                    "kind": "section",
+                    "raw_title": stripped,
+                })
+                break
+
+    if not headers:
         return [{
+            "type": "chapter",
             "number": 1,
             "title": "Capítulo Único",
-            "content": full_text.strip()
+            "content": full_text
         }]
 
+    headers.sort(key=lambda h: h['idx'])
+
     chapters = []
-    for i, match in enumerate(matches):
-        # Determine chapter number
-        num_str = match.group(2)
-        if num_str.isdigit():
-            chapter_number = int(num_str)
-        else:
-            chapter_number = _roman_to_int(num_str.upper())
+    current_chapter_number = 1
+    for i, h in enumerate(headers):
+        start = h["idx"]
+        end = headers[i + 1]["idx"] if i + 1 < len(headers) else len(lines)
+        body_lines = lines[start + 1:end]
+        content = "\n".join(body_lines).strip()
 
-        # Determine chapter content boundaries
-        start_content = match.end()
-        end_content = matches[i + 1].start() if i + 1 < len(matches) else len(full_text)
+        if h["kind"] == "chapter":
+            chapters.append({
+                "type": "chapter",
+                "number": current_chapter_number,
+                "title": h["raw_title"],
+                "content": content,
+            })
+            current_chapter_number += 1
+        else: # kind == "section"
+            chapters.append({
+                "type": "section",
+                "number": None,
+                "title": h["raw_title"],
+                "content": content,
+            })
 
-        content = full_text[start_content:end_content].strip()
-
-        chapters.append({
-            "number": chapter_number,
-            "title": f"Capítulo {chapter_number:02d}",
-            "content": content
-        })
+    n_chapters = sum(1 for c in chapters if c["type"] == "chapter")
+    n_sections = sum(1 for c in chapters if c["type"] == "section")
+    print(f"Found {n_chapters} chapter(s) and {n_sections} extra section(s).")
 
     return chapters

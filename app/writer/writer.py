@@ -1,6 +1,15 @@
 import os
 import yaml
 import traceback
+import re
+
+def _clean_title_for_filename(title):
+    """Sanitizes a title to be used in a folder or file name."""
+    # Remove chapter/section prefixes
+    title = re.sub(r'^\s*(Cap[ií]tulo|Chapter|CAP[IÍ]TULO|CHAPTER|Cap\.?)\s*([IVXLCDM\d]+)\.?:?\s*', '', title, flags=re.IGNORECASE)
+    # Remove special characters not suitable for filenames
+    title = re.sub(r'[\\/*?:"<>|]', '', title)
+    return title.strip()
 
 def write_vault(output_path, book_title, author, year, chapters):
     """
@@ -8,61 +17,63 @@ def write_vault(output_path, book_title, author, year, chapters):
     Obsidian vault structure.
     """
     try:
-        # 1. Create the root directory for the book
         book_root = os.path.join(output_path, book_title)
         os.makedirs(book_root, exist_ok=True)
 
-        # 2. Create chapter files
         for chapter in chapters:
-            chapter_number = chapter["number"]
+            chapter_title = chapter["title"]
+            clean_title = _clean_title_for_filename(chapter_title)
 
-            # Create chapter directory (e.g., /Capítulo 01/)
-            chapter_dir_name = f"Capítulo {chapter_number:02d}"
-            chapter_path = os.path.join(book_root, chapter_dir_name)
+            if chapter["type"] == "chapter":
+                folder_name = f"Capítulo {chapter['number']:02d} - {clean_title}"
+            else: # section
+                folder_name = chapter_title
+
+            chapter_path = os.path.join(book_root, folder_name)
             os.makedirs(chapter_path, exist_ok=True)
 
-            # Create chapter markdown file (e.g., /Capítulo 01/01 - Capítulo 01.md)
-            file_name = f"{chapter_number:02d} - {chapter_dir_name}.md"
-            file_path = os.path.join(chapter_path, file_name)
+            note_filename = f"Nota - {clean_title}.md"
+            file_path = os.path.join(chapter_path, note_filename)
 
-            # Create YAML frontmatter
             frontmatter = {
-                "titulo": f"Capítulo {chapter_number:02d}",
-                "libro": book_title,
+                "titulo_libro": book_title,
                 "autor": author,
-                "año": year,
-                "tipo": "capitulo",
-                "capitulo": chapter_number,
+                "ano": year,
+                "tipo": chapter["type"],
+                "numero_capitulo": chapter.get("number"),
+                "titulo_capitulo": chapter_title,
             }
+            # Remove chapter number if it's a section
+            if chapter["type"] == "section":
+                del frontmatter["numero_capitulo"]
 
             with open(file_path, 'w', encoding='utf-8') as f:
                 f.write("---\n")
-                yaml.dump(frontmatter, f, allow_unicode=True)
+                yaml.dump(frontmatter, f, allow_unicode=True, sort_keys=False)
                 f.write("---\n\n")
-                f.write(f"# Capítulo {chapter_number:02d}\n\n")
+                f.write(f"# {chapter_title}\n\n")
                 f.write(chapter["content"])
 
-        # 3. Create the main MOC file
-        moc_file_path = os.path.join(book_root, f"_MOC - {book_title}.md")
+        # Create the main MOC file
+        moc_file_path = os.path.join(book_root, f"MOC - {book_title}.md")
         with open(moc_file_path, 'w', encoding='utf-8') as f:
-            f.write(f"# Mapa del Libro – {book_title}\n\n")
-            f.write("## Capítulos\n\n")
-            for chapter in chapters:
-                chapter_number = chapter["number"]
-                dir_name = f"Capítulo {chapter_number:02d}"
-                file_base = f"{chapter_number:02d} - {dir_name}"
-                f.write(f"- [[{dir_name}/{file_base}]]\n")
+            f.write(f"# Índice – {book_title}\n\n")
 
-        # 4. Create the metadata.yaml file
-        metadata = {
-            "titulo": book_title,
-            "autor": author,
-            "año": year,
-            "capitulos": len(chapters)
-        }
-        metadata_file_path = os.path.join(book_root, "metadata.yaml")
-        with open(metadata_file_path, 'w', encoding='utf-8') as f:
-            yaml.dump(metadata, f, allow_unicode=True)
+            sections = [c for c in chapters if c["type"] == "section"]
+            if sections:
+                f.write("## Secciones\n")
+                for s in sections:
+                    clean_title = _clean_title_for_filename(s['title'])
+                    f.write(f"- [[{s['title']}/Nota - {clean_title}]]\n")
+                f.write("\n")
+
+            regular_chapters = [c for c in chapters if c["type"] == "chapter"]
+            if regular_chapters:
+                f.write("## Capítulos\n")
+                for c in regular_chapters:
+                    clean_title = _clean_title_for_filename(c['title'])
+                    folder_name = f"Capítulo {c['number']:02d} - {clean_title}"
+                    f.write(f"- [[{folder_name}/Nota - {clean_title}]]\n")
 
         print(f"Successfully created vault at: {book_root}")
 
