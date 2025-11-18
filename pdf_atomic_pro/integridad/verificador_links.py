@@ -32,8 +32,6 @@ def verify_links(book_root: Path) -> List[Dict]:
         for match in wikilink_pattern.finditer(content):
             link_target_raw = match.group(1).strip()
             
-            print(f"DEBUG: Source: '{source_file_relative_path}', Raw Link Target: '{link_target_raw}'")
-
             # Remove heading part if present (e.g., "file#heading" -> "file")
             link_target_file_part = link_target_raw.split('#')[0]
             
@@ -63,10 +61,6 @@ def verify_links(book_root: Path) -> List[Dict]:
             # This handles cases like [[My Note]] where "My Note.md" exists anywhere
             if not found and link_target_file_part.lower() in all_existing_filenames_without_ext:
                 found = True
-
-            print(f"DEBUG:   Resolved paths (from root): '{resolved_path_from_root_md}', '{resolved_path_from_root_no_md}'")
-            print(f"DEBUG:   Resolved paths (relative): '{resolved_relative_path_md}', '{resolved_relative_path_no_md}'")
-            print(f"DEBUG:   Found: {found}")
 
             if not found:
                 broken_links.append({

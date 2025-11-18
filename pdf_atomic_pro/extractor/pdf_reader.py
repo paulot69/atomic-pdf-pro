@@ -1,6 +1,4 @@
 import fitz  # PyMuPDF
-from pdf2image import convert_from_path
-import pytesseract
 from collections import Counter
 import re
 
@@ -44,7 +42,7 @@ def _clean_repeated_headers_footers_structured(pages_structured_text: list[list[
 
     return cleaned_pages_structured_text
 
-def _extract_text_with_pymupdf(pdf_path) -> list[list[dict]]:
+def extract_text_with_pymupdf(pdf_path) -> list[list[dict]]:
     """
     Extracts text and basic font information (size, bold) from a PDF using PyMuPDF.
     Returns a list of lists, where each inner list represents a page,
@@ -76,52 +74,9 @@ def _extract_text_with_pymupdf(pdf_path) -> list[list[dict]]:
                             page_lines.append({
                                 "text": line_text.strip(),
                                 "size": avg_font_size,
-                                "is_bold": line_is_bold
+                                "is_bold": line_is_bold,
+                                "y0": line['bbox'][1],
+                                "y1": line['bbox'][3]
                             })
             all_pages_structured_text.append(page_lines)
-    return all_pages_structured_text
-
-def _extract_text_with_ocr(pdf_path):
-    """Extracts text from a PDF using OCR."""
-    images = convert_from_path(pdf_path)
-    return [pytesseract.image_to_string(image) for image in images]
-
-def extract_text(pdf_path) -> list[list[dict]]:
-    """
-    Extracts text and font information from a PDF, determines if OCR is needed,
-    and cleans common headers/footers.
-    """
-    structured_pages_text = []
-    try:
-        structured_pages_text = _extract_text_with_pymupdf(pdf_path)
-
-        # Calculate total text length for fallback decision
-        total_text_len = sum(len(line['text'].strip()) for page in structured_pages_text for line in page)
-
-        # Fallback to OCR if text is minimal
-        if total_text_len < 500:
-            print("Minimal text extracted. Falling back to OCR...")
-            ocr_pages_text = _extract_text_with_ocr(pdf_path)
-            # Convert OCR plain text to structured format with default font info
-            structured_pages_text = []
-            for page_text in ocr_pages_text:
-                page_lines = []
-                for line in page_text.split('\n'):
-                    if line.strip():
-                        page_lines.append({"text": line.strip(), "size": 12.0, "is_bold": False}) # Default font info
-                structured_pages_text.append(page_lines)
-    except Exception as e:
-        print(f"Warning: Could not process with PyMuPDF ({e}). Falling back to OCR.")
-        ocr_pages_text = _extract_text_with_ocr(pdf_path)
-        structured_pages_text = []
-        for page_text in ocr_pages_text:
-            page_lines = []
-            for line in page_text.split('\n'):
-                if line.strip():
-                    page_lines.append({"text": line.strip(), "size": 12.0, "is_bold": False}) # Default font info
-            structured_pages_text.append(page_lines)
-
-    # Clean headers and footers from the extracted structured text
-    cleaned_pages_structured_text = _clean_repeated_headers_footers_structured(structured_pages_text)
-
-    return cleaned_pages_structured_text
+    return _clean_repeated_headers_footers_structured(all_pages_structured_text)
