@@ -31,14 +31,135 @@ def get_pdf_metadata(pdf_path):
         logging.warning(f"Could not extract metadata from PDF: {e}")
         return '', '', ''
 
+def process_pdf(pdf_path, title, author, year, output_dir, translate_to=None, toc_from_csv=None):
+    """
+    Processes a single PDF file into an atomic Obsidian vault.
+
+    Args:
+        pdf_path (str): The full path to the PDF file.
+        title (str): The title of the book.
+        author (str): The author of the book.
+        year (str): The publication year.
+        output_dir (str): The root directory for the generated vault.
+        translate_to (str, optional): The language to translate the content to. Defaults to None.
+        toc_from_csv (List[str], optional): An explicit list of chapter titles from CSV. Defaults to None.
+    """
+    # --- Temporary Directory Setup ---
+    temp_dir = tempfile.mkdtemp()
+    logging.info(f"Using temporary directory: {temp_dir}")
+
+    try:
+        # --- Processing Pipeline ---
+        logging.info(f"Starting processing for '{title}' by {author} ({year})")
+
+        # 1. Text Extraction
+        logging.info("Extracting text from PDF...")
+        try:
+            # First, try the standard text extraction
+            structured_text = pdf_reader.extract_text_with_pymupdf(pdf_path)
+            # Heuristic to check if extraction was successful
+            if not any(page_lines for page_lines in structured_text):
+                 raise ValueError("PyMuPDF extracted no text content.")
+        except Exception as e:
+            logging.warning(f"Standard text extraction with PyMuPDF failed or returned empty: {e}. Attempting OCR fallback...")
+            # Fallback to OCR if the initial method fails
+            structured_text = ocr_handler.extract_text_with_ocr(pdf_path)
+        
+        if not any(page_lines for page_lines in structured_text):
+            raise ValueError("No text could be extracted from the PDF, even with OCR.")
+
+        # 2. TOC Detection and Structuring
+        logging.info("Structuring chapters...")
+        toc_entries = []
+        is_inferred = False
+
+        if toc_from_csv:
+            logging.info("Using explicit TOC from CSV to find chapter locations.")
+            # Convert simple list of titles into the structured TOCEntry format for matching
+            toc_for_detection = [indice_detector.TOCEntry(title=t, page_number=-1, level=1) for t in toc_from_csv]
+            # Use the TOC to find where chapters are in the document
+            header_locations = jerarquia._find_headers_with_toc(
+                [line for page in structured_text for line in page],
+                toc_for_detection
+            )
+            # Reconstruct toc_entries from successfully found headers to maintain order and titles
+            if header_locations:
+                toc_entries = [indice_detector.TOCEntry(title=h['title'], page_number=-1, level=1) for h in header_locations]
+            else:
+                 logging.warning("Could not match any CSV TOC entries in the document text. Will attempt fallback.")
+
+        if not toc_entries:
+            logging.info("No CSV TOC or matches found, detecting TOC from PDF bookmarks...")
+            toc_entries = indice_detector.detect_toc_from_bookmarks(pdf_path)
+            if not toc_entries:
+                logging.info("No bookmarks found, searching for TOC in text...")
+                # Flatten structured_text for TOC detection
+                plain_text_for_toc = "\n".join([line['text'] for page in structured_text for line in page])
+                toc_entries = indice_detector.detect_toc_entries(plain_text_for_toc)
+
+        if not toc_entries:
+            logging.warning("No reliable TOC found. Structure will be inferred sequentially (fallback).")
+            is_inferred = True
+        
+        # The split_into_chapters function will use the found/provided toc_entries
+        # and then apply the sub-section splitting logic internally.
+        chapters = jerarquia.split_into_chapters(structured_text, toc_entries)
+
+        # --- Optional Translation ---
+        if translate_to:
+            chapters = traductor.translate_chapters(chapters, translate_to)
+
+        # 3. Vault Creation in Temp Directory
+        sanitized_title = notas_atomicas._sanitize_title_for_filename(title)
+        sanitized_author = notas_atomicas._sanitize_title_for_filename(author)
+
+        book_root_name = f"{year} - {sanitized_title} - {sanitized_author}"
+        if is_inferred:
+            book_root_name = f"[FI] - {book_root_name}"
+
+        temp_book_root_path = os.path.join(temp_dir, book_root_name)
+        os.makedirs(temp_book_root_path, exist_ok=True)
+
+        logging.info(f"Generating vault in temporary directory...")
+
+        # 4. Note and MOC Generation
+        atomic_chapters = notas_atomicas.process_and_write_atomic_notes(chapters, title, author, year, temp_book_root_path)
+        mocs.write_mocs(temp_book_root_path, title, author, year, atomic_chapters)
+
+        # 5. Link Verification
+        logging.info("Verifying link integrity...")
+        broken_links = verificador_links.verify_links(Path(temp_book_root_path))
+        if broken_links:
+            logging.warning("Broken links found:")
+            for link in broken_links:
+                logging.warning(f"  - In '{link['source_file']}': [[{link['broken_link']}]]")
+
+        # --- Finalization: Move to final location ---
+        final_output_path = os.path.join(output_dir, book_root_name)
+        if os.path.exists(final_output_path):
+            logging.warning(f"Destination directory already exists: {final_output_path}. It will be overwritten.")
+            shutil.rmtree(final_output_path)
+        
+        # shutil.move works across different drives (like from temp C: to G:)
+        shutil.move(temp_book_root_path, final_output_path)
+        logging.info(f"Processing successfully completed. Vault saved at: {final_output_path}")
+
+    except Exception as e:
+        logging.error(f"A fatal error occurred during processing: {e}", exc_info=True)
+
+    finally:
+        # --- Temporary Directory Cleanup ---
+        logging.info(f"Cleaning up temporary directory: {temp_dir}")
+        shutil.rmtree(temp_dir)
+
 def main():
-    parser = argparse.ArgumentParser(description="Convierte un PDF a un Vault de Obsidian Atómico.")
-    parser.add_argument("pdf_path", help="Ruta al archivo PDF a procesar.")
-    parser.add_argument("--titulo", help="Título del libro.")
-    parser.add_argument("--autor", help="Autor del libro.")
-    parser.add_argument("--ano", help="Año de publicación del libro.")
-    parser.add_argument("--salida", default="D:\\github\\Libros Atomicos", help="Directorio de salida para el vault atómico.")
-    parser.add_argument("--traducir-a", help="Activa la traducción al idioma especificado (ej. 'es').")
+    parser = argparse.ArgumentParser(description="Convert a PDF to an Atomic Obsidian Vault.")
+    parser.add_argument("pdf_path", help="Path to the PDF file to process.")
+    parser.add_argument("--titulo", help="Title of the book.")
+    parser.add_argument("--autor", help="Author of the book.")
+    parser.add_argument("--ano", help="Publication year of the book.")
+    parser.add_argument("--salida", default="D:\\github\\Libros Atomicos", help="Output directory for the atomic vault.")
+    parser.add_argument("--traducir-a", help="Translate content to the specified language (e.g., 'es').")
 
     args = parser.parse_args()
 
@@ -50,90 +171,19 @@ def main():
     year = args.ano if args.ano else pdf_year
 
     if not title:
-        title = input("Por favor, introduce el título del libro: ")
+        title = input("Please enter the title of the book: ")
     if not author:
-        author = input("Por favor, introduce el autor del libro: ")
+        author = input("Please enter the author of the book: ")
     if not year:
-        year = input("Por favor, introduce el año de publicación del libro: ")
+        year = input("Please enter the publication year of the book: ")
+    
+    # Call the main processing function
+    process_pdf(
+        pdf_path=args.pdf_path, 
+        title=title, 
+        author=author, 
+        year=year, 
+        output_dir=args.salida, 
+        translate_to=args.traducir_a
+    )
 
-    # --- Temporary Directory Setup ---
-    temp_dir = tempfile.mkdtemp()
-    logging.info(f"Usando directorio temporal: {temp_dir}")
-
-    try:
-        # --- Processing Pipeline ---
-        logging.info(f"Iniciando procesamiento para '{title}' por {author} ({year})")
-
-        # 1. Extracción de Texto
-        logging.info("Extrayendo texto del PDF...")
-        try:
-            structured_text = pdf_reader.extract_text_with_pymupdf(args.pdf_path)
-            if not any(structured_text):
-                raise ValueError("No text extracted")
-        except Exception as e:
-            logging.warning(f"PyMuPDF falló ({e}), intentando con OCR...")
-            structured_text = ocr_handler.extract_text_with_ocr(args.pdf_path)
-
-        # 2. Detección de Índice y Estructuración
-        logging.info("Detectando índice y estructurando capítulos...")
-        toc_entries = indice_detector.detect_toc_from_bookmarks(args.pdf_path)
-        is_inferred = False
-        if not toc_entries:
-            logging.info("No se encontraron bookmarks, buscando índice en el texto...")
-            toc_entries = indice_detector.detect_toc_entries(structured_text)
-
-        if not toc_entries:
-            logging.warning("No se encontró un índice fiable. La estructura será inferida secuencialmente.")
-            is_inferred = True
-
-        chapters = jerarquia.split_into_chapters(structured_text, toc_entries)
-
-        # --- Optional Translation ---
-        if args.traducir_a:
-            chapters = traductor.translate_chapters(chapters, args.traducir_a)
-
-        # 3. Creación del Vault en Directorio Temporal
-        sanitized_title = notas_atomicas._sanitize_title_for_filename(title)
-        sanitized_author = notas_atomicas._sanitize_title_for_filename(author)
-
-        book_root_name = f"{year} - {sanitized_title} - {sanitized_author}"
-        if is_inferred:
-            book_root_name = f"[FI] - {book_root_name}"
-
-        temp_book_root_path = os.path.join(temp_dir, book_root_name)
-        os.makedirs(temp_book_root_path, exist_ok=True)
-
-        logging.info(f"Generando vault en directorio temporal...")
-
-        # 4. Generación de Notas y MOCs
-        atomic_chapters = notas_atomicas.process_and_write_atomic_notes(chapters, title, author, year, temp_book_root_path)
-        mocs.write_mocs(temp_book_root_path, title, atomic_chapters)
-
-        # 5. Verificación de Enlaces
-        logging.info("Verificando la integridad de los enlaces...")
-        broken_links = verificador_links.verify_links(Path(temp_book_root_path))
-        if broken_links:
-            logging.warning("Se encontraron enlaces rotos:")
-            for link in broken_links:
-                logging.warning(f"  - En '{link['source_file']}': [[{link['broken_link']}]]")
-
-        # --- Finalización: Mover a la ubicación final ---
-        final_output_path = os.path.join(args.salida, book_root_name)
-        if os.path.exists(final_output_path):
-            logging.warning(f"El directorio de destino ya existe: {final_output_path}. Se sobrescribirá.")
-            shutil.rmtree(final_output_path)
-
-        shutil.move(temp_book_root_path, args.salida)
-        logging.info(f"Procesamiento completado con éxito. Vault guardado en: {final_output_path}")
-
-    except Exception as e:
-        logging.error(f"Ha ocurrido un error fatal durante el procesamiento: {e}", exc_info=True)
-        # No es necesario limpiar el directorio temporal aquí, ya que el bloque `finally` se encargará.
-
-    finally:
-        # --- Limpieza del Directorio Temporal ---
-        logging.info(f"Limpiando directorio temporal: {temp_dir}")
-        shutil.rmtree(temp_dir)
-
-if __name__ == "__main__":
-    main()

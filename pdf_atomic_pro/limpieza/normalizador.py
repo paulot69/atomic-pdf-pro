@@ -1,61 +1,67 @@
 import re
 from typing import List, Dict
+from collections import Counter
 
-def normalize_text(structured_lines: List[Dict], line_spacing_threshold_factor: float = 1.5) -> str:
+def normalize_text(structured_lines: List[Dict]) -> str:
     """
-    Convierte una lista de líneas de texto estructuradas en una única cadena de texto,
-    reconstruyendo párrafos y limpiando artefactos.
+    Converts a list of structured text lines into a single string,
+    intelligently reconstructing paragraphs based on vertical spacing.
     """
     if not structured_lines:
         return ""
 
-    text_parts = []
-    previous_line_y1 = None
-    previous_line_size = None
+    # Step 1: Reconstruct paragraphs from structured lines
+    paragraphs = []
+    current_paragraph_lines = []
 
-    for line_data in structured_lines:
-        current_text = line_data.get('text', '').strip()
-        if not current_text:
+    for i in range(len(structured_lines)):
+        line_data = structured_lines[i]
+        line_text = line_data.get('text', '').strip()
+        if not line_text:
             continue
 
-        current_y0 = line_data.get('y0')
-        current_y1 = line_data.get('y1')
-        current_size = line_data.get('size')
+        # Determine if this line starts a new paragraph
+        is_new_paragraph = False
+        if i > 0:
+            # Get the bottom of the previous line of text
+            prev_line_y1 = structured_lines[i-1].get('y1')
+            # Get the top of the current line of text
+            current_line_y0 = line_data.get('y0')
+            
+            if prev_line_y1 is not None and current_line_y0 is not None:
+                # Use font size of previous line as a reference for the expected line gap
+                prev_font_size = structured_lines[i-1].get('size', 10)
+                if prev_font_size <= 0: prev_font_size = 10
 
-        if all(x is not None for x in [current_y0, current_y1, current_size, previous_line_y1, previous_line_size]):
-            vertical_gap = current_y0 - previous_line_y1
+                gap = current_line_y0 - prev_line_y1
+                
+                # A gap larger than half the font size likely indicates a paragraph break.
+                if gap > (prev_font_size * 0.5):
+                    is_new_paragraph = True
+        
+        # If it's a new paragraph, finalize the previous one and start a new one
+        if is_new_paragraph and current_paragraph_lines:
+            paragraphs.append(" ".join(current_paragraph_lines))
+            current_paragraph_lines = [line_text]
+        else:
+            current_paragraph_lines.append(line_text)
 
-            # Si el espacio vertical es grande, es un nuevo párrafo.
-            if vertical_gap > (previous_line_size * line_spacing_threshold_factor):
-                text_parts.append("\n\n")
-            # Si no, es la misma línea o el mismo párrafo, así que unimos con un espacio.
-            else:
-                text_parts.append(" ")
+    # Add the last paragraph
+    if current_paragraph_lines:
+        paragraphs.append(" ".join(current_paragraph_lines))
 
-        text_parts.append(current_text)
-        previous_line_y1 = current_y1
-        previous_line_size = current_size
+    # Step 2: Join paragraphs and perform final cleaning
+    full_text = "\n\n".join(paragraphs)
 
-    # 1. Unir todas las partes
-    full_text = "".join(text_parts).strip()
-
-    # 2. Limpieza y Normalización
-
-    # Eliminar espacios múltiples que no sean saltos de línea
-    cleaned_text = re.sub(r'[ \t]+', ' ', full_text)
-
-    # Corregir espaciado alrededor de los saltos de párrafo
-    cleaned_text = re.sub(r'\s*\n\n\s*', '\n\n', cleaned_text)
-
-    # Eliminar líneas que solo contienen números (probables números de página)
-    lines = cleaned_text.split('\n')
-    cleaned_lines = [line for line in lines if not re.fullmatch(r'\s*\d+\s*', line)]
+    # Remove lines that consist only of digits (likely page numbers)
+    lines = full_text.split('\n')
+    cleaned_lines = [line for line in lines if not line.strip().isdigit()]
     cleaned_text = "\n".join(cleaned_lines)
-
-    # Normalizar múltiples saltos de línea a un máximo de dos
+    
+    # Normalize multiple newlines to a maximum of two
     cleaned_text = re.sub(r'\n{3,}', '\n\n', cleaned_text)
-
-    # Eliminar caracteres problemáticos de UTF-8
+    
+    # Remove lingering problematic characters
     cleaned_text = cleaned_text.encode('utf-8', 'ignore').decode('utf-8')
 
     return cleaned_text.strip()

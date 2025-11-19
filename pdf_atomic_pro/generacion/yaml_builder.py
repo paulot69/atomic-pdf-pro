@@ -1,25 +1,7 @@
 import re
 from typing import Dict, List
 from collections import Counter
-
-def _sanitize_title_for_filename(title: str, max_length: int = 100) -> str:
-    """
-    Sanitizes a title to be used in a filename, removing invalid characters,
-    replacing spaces with hyphens, and limiting the length.
-    """
-    # Remove invalid characters for filenames
-    title = re.sub(r'[\\/*?:"<>|«»()\[\]{}.,;!@#$%^&+=~`]', '', title)
-    # Replace multiple spaces with a single space, then replace spaces with hyphens
-    title = re.sub(r'\s+', ' ', title).strip()
-    title = title.replace(' ', '-')
-    # Remove any leading/trailing hyphens
-    title = title.strip('-')
-    # Limit length
-    if len(title) > max_length:
-        title = title[:max_length].rsplit('-', 1)[0] # Try to cut at a hyphen
-        if not title: # If cutting at hyphen resulted in empty string, just truncate
-            title = title[:max_length]
-    return title
+from .utils import _sanitize_title_for_filename
 
 def _generate_semantic_tags(content: str, max_tags: int = 3) -> List[str]:
     """
