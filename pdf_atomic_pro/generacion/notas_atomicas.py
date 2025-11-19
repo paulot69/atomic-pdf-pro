@@ -4,7 +4,8 @@ import yaml
 from typing import List, Dict
 from .utils import _sanitize_title_for_filename, get_main_moc_name
 from .yaml_builder import generate_frontmatter
-from .summarizer import generate_summary
+from .summarizer import generate_fallback_summary
+from ai_connector import MetadataEngine
 
 def _generate_navigation_footer(atomic_note: Dict, book_title: str) -> str:
     """Generates the standardized navigation footer for an atomic note."""
@@ -66,12 +67,15 @@ for (const page of pages) {
     
     return "\n".join(footer_parts)
 
-def process_and_write_atomic_notes(chapters: List[Dict], book_title: str, author: str, year: str, book_root: str, thematic_folder: str = None, theme_nomenclature: str = None, generate_summaries: bool = False) -> List[Dict]:
+def process_and_write_atomic_notes(chapters: List[Dict], book_title: str, author: str, year: str, book_root: str, thematic_folder: str = None, theme_nomenclature: str = None, use_ai: bool = True) -> List[Dict]:
     """
     Processes chapters into atomic notes and writes them to the vault.
     """
     atomic_chapters_data = []
     all_atomic_notes_for_linking = []
+
+    # Initialize the AI engine only if needed
+    metadata_engine = MetadataEngine() if use_ai else None
 
     chapter_num_counter = 1
     for chapter in chapters:
@@ -85,9 +89,33 @@ def process_and_write_atomic_notes(chapters: List[Dict], book_title: str, author
             atomic_note_title = section['title']
             atomic_note_content = section['content']
 
-            decimal_number = f"{current_chapter_number}.{note_num_counter}" if current_chapter_number is not None else None
+            summary = ""
+            semantic_tags = []
 
-            summary = generate_summary(atomic_note_content) if generate_summaries else ""
+            # Clean the content for the AI
+            cleaned_content = atomic_note_content.strip()
+            cleaned_content = re.sub(r'\s+', ' ', cleaned_content) # Replace multiple spaces/newlines with a single space
+
+            if use_ai and metadata_engine and cleaned_content:
+                try:
+                    ai_metadata = metadata_engine.get_metadata(cleaned_content)
+                    summary = ai_metadata.get('summary', '')
+                    semantic_tags = ai_metadata.get('tags', [])
+
+                    # Fallback if AI returns empty summary
+                    if not summary:
+                        print(f"Warning: AI returned empty metadata for note '{atomic_note_title}'. Using fallback summary.")
+                        summary = generate_fallback_summary(atomic_note_content)
+
+                except Exception as e:
+                    print(f"Warning: AI failed for note '{atomic_note_title}', using fallback. Error: {e}")
+                    summary = generate_fallback_summary(atomic_note_content)
+            else:
+                 # Use fallback if AI is disabled or content is empty
+                 summary = generate_fallback_summary(atomic_note_content)
+
+
+            decimal_number = f"{current_chapter_number}.{note_num_counter}" if current_chapter_number is not None else None
 
             atomic_note = {
                 "chapter_title": chapter['title'],
@@ -104,7 +132,8 @@ def process_and_write_atomic_notes(chapters: List[Dict], book_title: str, author
                 atomic_note, book_title, author,
                 thematic_folder=thematic_folder,
                 theme_nomenclature=theme_nomenclature,
-                summary=summary
+                summary=summary,
+                semantic_tags=semantic_tags
             )
             atomic_notes_in_chapter.append(atomic_note)
             all_atomic_notes_for_linking.append(atomic_note)
