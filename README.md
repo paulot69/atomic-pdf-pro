@@ -2,32 +2,17 @@
 
 ## Descripción
 
-**PDF Atomic Pro** ha sido rediseñado para ser una herramienta de procesamiento de conocimiento de alta precisión. Su misión es transformar un archivo PDF en un **Vault de Obsidian perfectamente estructurado, navegable y fiel al contenido original**, basándose en una interpretación experta del índice del libro.
-
-Esta versión abandona la simple extracción para adoptar una filosofía donde **la estructura del índice del autor es la ley**. El resultado es un conjunto de notas atómicas limpias, interconectadas y enriquecidas con metadatos inteligentes, listas para una gestión del conocimiento seria.
+**PDF Atomic Pro** transforma archivos PDF en **Vaults de Obsidian** estructurados, navegables y enriquecidos con metadatos inteligentes. La herramienta prioriza la estructura del índice del autor para crear un conjunto de notas atómicas limpias e interconectadas.
 
 ## Características Principales
 
--   **Detección de Índice Experta:** Utiliza un sistema de tres capas para encontrar y jerarquizar el índice del libro, asegurando que la estructura de carpetas sea un reflejo fiel de la obra original.
-    1.  **Bookmarks del PDF:** Máxima prioridad. Si existen, se convierten en la estructura maestra.
-    2.  **Búsqueda Textual Inteligente:** Busca en español, inglés y portugués palabras clave como "Índice" o "Contents" al principio y al final del documento.
-    3.  **Análisis Estructural:** Como último recurso, detecta patrones de texto (título + número de página) para inferir el índice.
-    4.  **Fallback Robusto:** Si no se encuentra un índice fiable, procesa el libro secuencialmente y lo marca con el prefijo `[FI]` (Estructura Inferida).
-
--   **Normalización del Contenido:** Aplica un riguroso proceso de limpieza para garantizar la legibilidad sin alterar la redacción del autor.
-    -   Reconstrucción de párrafos.
-    -   Eliminación de encabezados y pies de página.
-    -   Limpieza de artefactos de OCR y dobles espacios.
-
--   **Sistema de Tags Inteligente:** Cada nota se enriquece con dos tipos de tags:
-    -   **Tags Estructurales (Automáticos):** `libro/titulo-del-libro`, `capitulo/nombre-del-capitulo` para una organización jerárquica.
-    -   **Tags Semánticos (Opcionales):** Extrae de 1 a 3 palabras clave del contenido para facilitar el descubrimiento de temas.
-
--   **Traducción Opcional:** Permite traducir el contenido del libro a otro idioma de forma controlada a través de un comando específico.
-
--   **Verificación de Integridad:** Al finalizar, un módulo audita todos los `[[wikilinks]]` generados para garantizar que no haya ningún enlace roto dentro del vault.
-
--   **Navegación Fluida:** Genera Mapas de Contenido (MOCs) y pies de página con scripts `dataviewjs` para una exploración intuitiva entre notas y capítulos.
+-   **Detección de Índice Experta:** Utiliza un sistema de tres capas (bookmarks, búsqueda textual, análisis estructural) para replicar fielmente la jerarquía del libro.
+-   **Normalización del Contenido:** Limpia y reconstruye el texto para máxima legibilidad sin alterar la redacción original.
+-   **Sistema de Tags Híbrido:**
+    -   **Estructurales (Automáticos):** `libro/titulo`, `capitulo/nombre` para organización.
+    -   **Semánticos (IA):** Generados por IA para facilitar el descubrimiento de temas, con reglas personalizables.
+-   **Auditoría de Tags:** Genera un reporte con todos los tags únicos utilizados en un libro, ideal para supervisar la IA.
+-   **Navegación Fluida:** Crea Mapas de Contenido (MOCs) y pies de página con `dataviewjs` para una exploración intuitiva.
 
 ## Instalación
 
@@ -42,45 +27,47 @@ Esta versión abandona la simple extracción para adoptar una filosofía donde *
     pip install -r requirements.txt
     ```
 
-## Uso Simplificado
+## Configuración
 
-El programa ha sido rediseñado para ser fácil de usar, requiriendo solo la ruta al PDF.
+Antes de usar el programa, es necesario configurar el entorno.
 
-**Sintaxis Principal:**
+1.  **Crear el archivo `.env`:**
+    *   Crea una copia del archivo `.env.example` y renómbrala a `.env`.
+
+2.  **Configurar la IA (Opcional):**
+    *   Abre tu archivo `.env`.
+    *   Añade tu clave de API de Google Gemini a la variable `GEMINI_API_KEY`.
+    *   Si dejas esta clave vacía, el programa funcionará en modo local (sin IA).
+
+3.  **Configurar Google Sheets (Opcional, para modo en lote):**
+    *   Abre tu hoja de cálculo y ve a `Archivo` > `Compartir` > `Publicar en la web`.
+    *   Elige `Toda la hoja` (o la hoja específica) y `Valores separados por comas (.csv)`.
+    *   Copia el enlace generado y pégalo en la variable `SHEET_CSV_URL` de tu archivo `.env`.
+
+4.  **Personalizar la Taxonomía de la IA (Avanzado):**
+    *   Puedes editar las reglas que sigue la IA para generar tags modificando el archivo: `config/taxonomy_rules.txt`.
+    *   Esto te permite añadir o quitar dominios y ajustar las instrucciones sin tocar el código.
+
+## Uso
+
+Existen dos modos principales para ejecutar el programa.
+
+### Modo 1: Procesar un Solo PDF
+
+Ideal para procesar un archivo a la vez. El script te preguntará interactivamente si falta algún dato (título, autor, etc.).
+
+**Sintaxis:**
 ```bash
-python main.py <ruta_al_pdf>
+python main.py <ruta_al_pdf> [argumentos_opcionales]
 ```
-
-**Comportamiento:**
-1.  El programa intentará extraer automáticamente el **título, autor y año** de los metadatos del archivo PDF.
-2.  Si falta algún dato, **te lo preguntará interactivamente** en la consola.
-3.  El vault de Obsidian se generará por defecto en `D:\github\Libros Atomicos`.
-
 **Ejemplo:**
 ```bash
 python main.py "D:\Mis Libros\Clean Code.pdf"
 ```
 
-### Uso Avanzado (Personalizado)
+### Modo 2: Procesar en Lote desde Google Sheets
 
-Si deseas anular el comportamiento automático, puedes usar los siguientes argumentos:
-
-**Sintaxis Avanzada:**
-```bash
-python main.py <ruta_al_pdf> [--titulo "<Título>"] [--autor "<Autor>"] [--ano "<Año>"] [--salida "<Ruta>"] [--traducir-a "<idioma>"]
-```
-
-**Argumentos Opcionales:**
--   `--titulo`: Especifica un título diferente.
--   `--autor`: Especifica un autor diferente.
--   `--ano`: Especifica un año diferente.
--   `--salida`: Define una ruta de salida personalizada para el vault atómico.
--   `--traducir-a`: Activa la traducción. Ejemplo: `--traducir-a "es"` para traducir a español.
--   `--sin-ia`: (V2.0+) Desactiva la generación de resúmenes y tags con IA, usando el método de fallback local.
-
-## Automatización con Google Sheets
-
-Para un procesamiento en lote y centralizado, puedes usar `sheet_runner.py` para orquestar la creación de vaults directamente desde una hoja de cálculo de Google Sheets.
+El modo recomendado para un flujo de trabajo automatizado. El script lee tu hoja de Google Sheets y procesa todos los libros que hayas marcado.
 
 **Sintaxis:**
 ```bash
@@ -91,46 +78,16 @@ python sheet_runner.py
 python sheet_runner.py --sin-ia
 ```
 
-### Configuración
+**Requisitos de la Hoja:**
+Tu hoja de cálculo debe contener, como mínimo, las siguientes columnas:
+-   `ATOMIZAR LIBRO.` (con el valor "SI" para los libros a procesar).
+-   `URL LOCAL` (con la ruta completa al archivo PDF).
+-   `Título Original del Libro`
+-   `Autor (Nombre Apellido)`
+-   `Año de Publicación`
 
-1.  **Preparar la Hoja de Google:**
-    *   Asegúrate de que tu hoja de cálculo tenga, como mínimo, las siguientes columnas:
-        *   `ATOMIZAR LIBRO.` (para marcar con "SI" los libros a procesar).
-        *   `URL LOCAL` (con la ruta completa al archivo PDF en tu sistema).
-        *   `Título Original del Libro`
-        *   `Autor (Nombre Apellido)`
-        *   `Año de Publicación`
-
-2.  **Publicar la Hoja como CSV:**
-    *   En Google Sheets, ve a `Archivo` > `Compartir` > `Publicar en la web`.
-    *   En la ventana que aparece, selecciona `Toda la hoja` (o la hoja específica que quieres usar).
-    *   En el menú desplegable, elige `Valores separados por comas (.csv)`.
-    *   Haz clic en `Publicar`.
-    *   Copia el enlace generado. Será algo como: `https://docs.google.com/spreadsheets/d/e/.../pub?output=csv`.
-
-3.  **Configurar el `.env`:**
-    *   Abre tu archivo `.env` (o crea uno a partir de `.env.example`).
-    *   Pega el enlace que copiaste en la variable `SHEET_CSV_URL`.
-    *   Asegúrate también de que tu `GEMINI_API_KEY` esté configurada si deseas usar la generación de metadatos por IA.
-
-    ```dotenv
-    GEMINI_API_KEY=tu_clave_de_api_aqui
-    SHEET_CSV_URL=https://docs.google.com/spreadsheets/d/e/.../pub?output=csv
-    ```
-
-Una vez configurado, simplemente ejecuta `python sheet_runner.py` y el script se encargará de buscar, validar y procesar todos los libros que hayas marcado.
-
-## Estructura de Salida del Vault
-
-La estructura generada es predecible y organizada:
-
-```
-[Directorio de Salida]/
-└── [Año] - [Título del Libro] - [Autor]/
-    ├── MOC - [Título del Libro].md
-    ├── Capítulo 01 - [Título del Capítulo]/
-    │   ├── MOC - [Título del Capítulo].md
-    │   ├── 1.1 - [Concepto Atómico 1].md
-    │   └── ...
-    └── ...
-```
+## Argumentos Opcionales (para `main.py`)
+-   `--titulo`, `--autor`, `--ano`: Especifican los metadatos del libro.
+-   `--salida`: Define una ruta de salida personalizada.
+-   `--traducir-a`: Activa la traducción a un idioma (ej: "es").
+-   `--sin-ia`: Desactiva la generación de metadatos con IA.
