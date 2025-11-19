@@ -1,16 +1,35 @@
 import os
 import yaml
-from typing import List, Dict
+from pathlib import Path
 from .utils import _sanitize_title_for_filename, get_main_moc_name
 
-def _write_metadata_file(book_root: str, book_title: str, author: str, year: str, chapters: list):
-    """Gathers all tags and writes them to a dedicated metadata file."""
+def _write_metadata_file(book_root: str, book_title: str, author: str, year: str):
+    """
+    Gathers all unique tags by scanning the generated Markdown files
+    and writes them to a dedicated metadata file for auditing.
+    """
     print("Generating metadata file with all tags...")
     all_tags = set()
-    for chapter in chapters:
-        for note in chapter.get('atomic_notes', []):
-            tags = note.get('frontmatter', {}).get('tags', [])
-            all_tags.update(tags)
+    book_root_path = Path(book_root)
+
+    # Iterate over all generated markdown files
+    for md_file in book_root_path.rglob("*.md"):
+        # Exclude MOCs and the metadata file itself to avoid recursion
+        if md_file.name.startswith("MOC") or "METADATA" in str(md_file):
+            continue
+
+        try:
+            with open(md_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+                # Find the YAML frontmatter block
+                if content.startswith("---"):
+                    yaml_content = content.split("---")[1]
+                    frontmatter = yaml.safe_load(yaml_content)
+                    if isinstance(frontmatter, dict) and 'tags' in frontmatter:
+                        all_tags.update(frontmatter['tags'])
+        except Exception as e:
+            print(f"Warning: Could not process file {md_file} for tag extraction: {e}")
+
 
     if not all_tags:
         print("No tags found to generate metadata file.")
@@ -26,7 +45,7 @@ def _write_metadata_file(book_root: str, book_title: str, author: str, year: str
     sorted_tags = sorted(list(all_tags))
     
     content = f"# Tags para '{book_title}'\n\n"
-    content += "Lista de todos los tags utilizados en este libro, en orden alfabético.\n\n"
+    content += "Lista de todos los tags únicos utilizados en este libro, en orden alfabético.\n\n"
     content += "\n".join(f"- `{tag}`" for tag in sorted_tags)
     
     with open(tags_note_path, 'w', encoding='utf-8') as f:
@@ -83,17 +102,19 @@ dv.list(allAtomicNotes.map(p => dv.fileLink(p.file.path)));
     # --- Rule 1: Write Chapter MOCs (conditionally) ---
     print("Writing MOC files...")
     for chapter_data in chapters:
+        # NOTE: The creation of chapter directories is now handled in 'notas_atomicas.py'
+        # We only write the MOC if needed.
         if len(chapter_data.get('atomic_notes', [])) > 1:
             chapter_title = chapter_data['chapter_title']
             chapter_number = chapter_data.get('chapter_number')
-            
+
             if chapter_number is not None:
                 folder_name = f"Capítulo {chapter_number:02d} - {_sanitize_title_for_filename(chapter_title)}"
             else:
                 folder_name = _sanitize_title_for_filename(chapter_title)
             
+            # The folder is now expected to exist.
             chapter_path = os.path.join(book_root, folder_name)
-            os.makedirs(chapter_path, exist_ok=True) 
 
             moc_filename = f"MOC - {_sanitize_title_for_filename(chapter_title)}.md"
             moc_path = os.path.join(chapter_path, moc_filename)
@@ -107,15 +128,13 @@ dv.list(allAtomicNotes.map(p => dv.fileLink(p.file.path)));
     main_moc_filename, _ = get_main_moc_name(book_title, author, year)
     main_moc_path = os.path.join(book_root, main_moc_filename)
     
-    book_root_for_dataview = os.path.basename(book_root).replace("'", "'\'")
-
     with open(main_moc_path, 'w', encoding='utf-8') as f:
         f.write(f"# Mapa de Contenido – {book_title}\n\n")
         f.write("## Capítulos\n")
-        f.write(main_moc_chapters_script.replace('"{bookRoot}"', f'"{book_root_for_dataview}"') + "\n\n")
+        f.write(main_moc_chapters_script + "\n\n")
         f.write("## Todas las Notas\n")
-        f.write(main_moc_all_notes_script.replace('"{bookRoot}"', f'"{book_root_for_dataview}"'))
+        f.write(main_moc_all_notes_script)
     print(f"Generated main MOC: {main_moc_path}")
 
     # --- Rule 3: Write Metadata File ---
-    _write_metadata_file(book_root, book_title, author, year, chapters)
+    _write_metadata_file(book_root, book_title, author, year)

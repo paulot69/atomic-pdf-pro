@@ -1,0 +1,22 @@
+REGLAS DE ETIQUETADO (TAGSONOMÍA TERRAUGUSTA):
+
+1. JERARQUÍA OBLIGATORIA:
+   - Todo tag debe seguir la estructura: dominio/sub-dominio (kebab-case).
+   - NO uses tags sueltos (ej: #narrativa es INVALIDO, #narrativa/estructura es VALIDO).
+
+2. TAGS FIJOS (Incluir siempre):
+   - #status/desarrollo (Para indicar que es una nota procesada automáticamente)
+   - #tipo/referencia (Porque proviene de una fuente bibliográfica)
+   - #fuente/[apellido-autor] (Si se detecta el autor)
+
+3. DOMINIOS CANÓNICOS (Prioridad Alta - Intenta encajar aquí):
+   - #worldbuilding/ (cosmologia, geografia, cultura, magia, tecnologia, sociedad, politica, economia, personajes)
+   - #narrativa/ (estructura, personaje, trama, proceso_escritura)
+   - #zettelkasten/ (metodologia, notas)
+
+4. EXPANSIÓN DE DOMINIOS (Libros de otros temas):
+   - Si el libro trata de un tema ajeno (ej. Cocina, Mecánica), CREA un nuevo dominio raíz.
+   - Regla: #nuevo-tema/sub-tema (ej: #cocina/tecnicas, #mecanica/motores).
+
+5. RESUMEN:
+   - Genera una única frase potente y sintética en español.
