@@ -8,3 +8,5 @@ googletrans==4.0.0-rc1
 pytest
 PyPDF2
 requests
+google-generativeai
+python-dotenv
