@@ -5,6 +5,7 @@ import os
 
 # Importar la lógica de procesamiento principal
 from main import process_pdf
+from pdf_atomic_pro.estructura.indice_detector import TOCEntry
 
 # URL del CSV publicado desde Google Sheets
 CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTiydVmQoG5Qg9Qij_H7gxjLOiFWTEKxijdK9rST1M_ZzhZAKstDAcg49alka3WM4iWNUEffJ9aCjGo/pub?gid=0&single=true&output=csv"
@@ -42,17 +43,25 @@ def run_batch_process():
             author = book.get('autor (nombre apellido)', '').strip()
             year = book.get('año de publicación', '').strip()
             indice_str = book.get('indice', '').strip()
+            thematic_folder = book.get('carpeta temática final', '').strip()
+            theme_nomenclature = book.get('tema (para nomenclatura)', '').strip()
+            generate_summaries = book.get('generar resumen', '').strip().upper() == 'SI'
 
             if not all([pdf_path, title, author, year]):
                 print(f"ADVERTENCIA: Se omitió un libro por falta de datos. Título: '{title}', Ruta: '{pdf_path}'")
                 continue
 
-            # Parsear el índice si existe
-            toc_from_csv = None
+            # Parsear el índice si existe, detectando jerarquía por sangría
+            toc_from_csv = []
             if indice_str:
-                # Dividir por saltos de línea y eliminar líneas vacías
-                toc_from_csv = [line.strip() for line in indice_str.split('\n') if line.strip()]
-                print(f"Índice explícito encontrado para '{title}' con {len(toc_from_csv)} capítulos.")
+                lines = [line for line in indice_str.split('\n') if line.strip()]
+                for line in lines:
+                    indentation = len(line) - len(line.lstrip(' \t'))
+                    level = (indentation // 4) + 1
+                    title_text = line.strip()
+                    toc_from_csv.append(TOCEntry(title=title_text, page_number=-1, level=level))
+
+                print(f"Índice explícito encontrado para '{title}' con {len(toc_from_csv)} entradas y estructura jerárquica.")
 
             print(f"\n--- Iniciando procesamiento para: {title} ---")
             
@@ -71,7 +80,10 @@ def run_batch_process():
                     author=author,
                     year=year,
                     output_dir=DEFAULT_OUTPUT_DIR,
-                    toc_from_csv=toc_from_csv
+                    toc_from_csv=toc_from_csv,
+                    thematic_folder=thematic_folder,
+                    theme_nomenclature=theme_nomenclature,
+                    generate_summaries=generate_summaries
                 )
                 print(f"--- Procesamiento de '{title}' completado. ---")
 

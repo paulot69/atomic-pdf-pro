@@ -4,6 +4,7 @@ import yaml
 from typing import List, Dict
 from .utils import _sanitize_title_for_filename, get_main_moc_name
 from .yaml_builder import generate_frontmatter
+from .summarizer import generate_summary
 
 def _generate_navigation_footer(atomic_note: Dict, book_title: str) -> str:
     """Generates the standardized navigation footer for an atomic note."""
@@ -18,7 +19,7 @@ def _generate_navigation_footer(atomic_note: Dict, book_title: str) -> str:
         folder_name = chapter_title_sanitized
     
     chapter_moc_filename = f"MOC - {chapter_title_sanitized}.md"
-    chapter_moc_link_target = f"{folder_name}/{chapter_moc_filename}".replace("\", "/")
+    chapter_moc_link_target = f"{folder_name}/{chapter_moc_filename}".replace("\\", "/")
     chapter_moc_display_text = f"MOC - {atomic_note['chapter_title']}"
 
     # Main Book MOC Link
@@ -65,7 +66,7 @@ for (const page of pages) {
     
     return "\n".join(footer_parts)
 
-def process_and_write_atomic_notes(chapters: List[Dict], book_title: str, author: str, year: str, book_root: str) -> List[Dict]:
+def process_and_write_atomic_notes(chapters: List[Dict], book_title: str, author: str, year: str, book_root: str, thematic_folder: str = None, theme_nomenclature: str = None, generate_summaries: bool = False) -> List[Dict]:
     """
     Processes chapters into atomic notes and writes them to the vault.
     """
@@ -86,6 +87,8 @@ def process_and_write_atomic_notes(chapters: List[Dict], book_title: str, author
 
             decimal_number = f"{current_chapter_number}.{note_num_counter}" if current_chapter_number is not None else None
 
+            summary = generate_summary(atomic_note_content) if generate_summaries else ""
+
             atomic_note = {
                 "chapter_title": chapter['title'],
                 "chapter_number": current_chapter_number,
@@ -97,7 +100,12 @@ def process_and_write_atomic_notes(chapters: List[Dict], book_title: str, author
                 "total_notes_in_chapter": num_sections
             }
 
-            atomic_note['frontmatter'] = generate_frontmatter(atomic_note, book_title, author)
+            atomic_note['frontmatter'] = generate_frontmatter(
+                atomic_note, book_title, author,
+                thematic_folder=thematic_folder,
+                theme_nomenclature=theme_nomenclature,
+                summary=summary
+            )
             atomic_notes_in_chapter.append(atomic_note)
             all_atomic_notes_for_linking.append(atomic_note)
             note_num_counter += 1
@@ -105,6 +113,7 @@ def process_and_write_atomic_notes(chapters: List[Dict], book_title: str, author
         atomic_chapters_data.append({
             "chapter_title": chapter['title'],
             "chapter_number": current_chapter_number,
+            "level": chapter.get('level', 1), # <-- Ensure the level is passed through
             "atomic_notes": atomic_notes_in_chapter
         })
 
@@ -137,13 +146,37 @@ def process_and_write_atomic_notes(chapters: List[Dict], book_title: str, author
                      if alias.lower() != note_title.lower():
                         note_path_mapping[alias] = full_wikilink_path
 
+    # This stack will hold the path of the parent directory for each level.
+    # path_stack[0] is the book's root, path_stack[1] is the active Level 1 chapter path, etc.
+    path_stack = [book_root]
+
     # Perform wikilink replacement and write notes
     for chapter_data in atomic_chapters_data:
         chapter_title = chapter_data['chapter_title']
         chapter_number = chapter_data.get('chapter_number')
+        chapter_level = chapter_data.get('level', 1)
+
         folder_name = f"Capítulo {chapter_number:02d} - {_sanitize_title_for_filename(chapter_title)}" if chapter_number is not None else _sanitize_title_for_filename(chapter_title)
-        chapter_path = os.path.join(book_root, folder_name)
+
+        # --- Corrected Path Stack Logic for Nested Directories ---
+        # The parent directory is at the index corresponding to the level minus 1.
+        # e.g., a Level 1 chapter's parent is path_stack[0] (the root).
+        # a Level 2 chapter's parent is path_stack[1].
+        parent_path = path_stack[chapter_level - 1]
+        chapter_path = os.path.join(parent_path, folder_name)
+
         os.makedirs(chapter_path, exist_ok=True)
+
+        # Update the path stack for any potential children.
+        if len(path_stack) > chapter_level:
+            # We are moving to a chapter at the same or a higher level than before.
+            # Replace the path at the current level.
+            path_stack[chapter_level] = chapter_path
+            # Trim any deeper, now invalid, paths from the stack.
+            path_stack = path_stack[:chapter_level + 1]
+        else:
+            # We are descending one level deeper.
+            path_stack.append(chapter_path)
 
         for atomic_note in chapter_data['atomic_notes']:
             atomic_note['footer'] = _generate_navigation_footer(atomic_note, book_title)

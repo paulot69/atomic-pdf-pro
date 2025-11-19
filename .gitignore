@@ -1,22 +1,3 @@
-# Python
 __pycache__/
 *.pyc
-*.pyo
-*.pyd
-.Python
-env/
-venv/
-pip-selfcheck.json
-.egg-info/
-
-# Build artifacts
-build/
-dist/
-*.egg-info/
-*.so
-*.egg
-
-# Test files
-alice_in_wonderland.pdf
-test.tex
-wonderland_vault/
+/test_output/

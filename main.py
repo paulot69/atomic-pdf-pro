@@ -31,7 +31,7 @@ def get_pdf_metadata(pdf_path):
         logging.warning(f"Could not extract metadata from PDF: {e}")
         return '', '', ''
 
-def process_pdf(pdf_path, title, author, year, output_dir, translate_to=None, toc_from_csv=None):
+def process_pdf(pdf_path, title, author, year, output_dir, translate_to=None, toc_from_csv=None, thematic_folder=None, theme_nomenclature=None, generate_summaries=False):
     """
     Processes a single PDF file into an atomic Obsidian vault.
 
@@ -42,7 +42,10 @@ def process_pdf(pdf_path, title, author, year, output_dir, translate_to=None, to
         year (str): The publication year.
         output_dir (str): The root directory for the generated vault.
         translate_to (str, optional): The language to translate the content to. Defaults to None.
-        toc_from_csv (List[str], optional): An explicit list of chapter titles from CSV. Defaults to None.
+        toc_from_csv (List[TOCEntry], optional): An explicit list of chapter entries from CSV. Defaults to None.
+        thematic_folder (str, optional): The thematic folder for domain tags.
+        theme_nomenclature (str, optional): The theme nomenclature for sub-domain tags.
+        generate_summaries (bool): Whether to generate summaries for atomic notes.
     """
     # --- Temporary Directory Setup ---
     temp_dir = tempfile.mkdtemp()
@@ -75,18 +78,17 @@ def process_pdf(pdf_path, title, author, year, output_dir, translate_to=None, to
 
         if toc_from_csv:
             logging.info("Using explicit TOC from CSV to find chapter locations.")
-            # Convert simple list of titles into the structured TOCEntry format for matching
-            toc_for_detection = [indice_detector.TOCEntry(title=t, page_number=-1, level=1) for t in toc_from_csv]
-            # Use the TOC to find where chapters are in the document
+            toc_entries = toc_from_csv
+            # The _find_headers_with_toc function now directly returns all necessary info,
+            # including the level. No reconstruction is needed here.
             header_locations = jerarquia._find_headers_with_toc(
                 [line for page in structured_text for line in page],
-                toc_for_detection
+                toc_entries
             )
-            # Reconstruct toc_entries from successfully found headers to maintain order and titles
-            if header_locations:
-                toc_entries = [indice_detector.TOCEntry(title=h['title'], page_number=-1, level=1) for h in header_locations]
-            else:
+            # If matches are found, we proceed. Otherwise, the fallback logic will trigger.
+            if not header_locations:
                  logging.warning("Could not match any CSV TOC entries in the document text. Will attempt fallback.")
+                 toc_entries = [] # Clear toc_entries to ensure fallback is used
 
         if not toc_entries:
             logging.info("No CSV TOC or matches found, detecting TOC from PDF bookmarks...")
@@ -123,7 +125,12 @@ def process_pdf(pdf_path, title, author, year, output_dir, translate_to=None, to
         logging.info(f"Generating vault in temporary directory...")
 
         # 4. Note and MOC Generation
-        atomic_chapters = notas_atomicas.process_and_write_atomic_notes(chapters, title, author, year, temp_book_root_path)
+        atomic_chapters = notas_atomicas.process_and_write_atomic_notes(
+            chapters, title, author, year, temp_book_root_path,
+            thematic_folder=thematic_folder,
+            theme_nomenclature=theme_nomenclature,
+            generate_summaries=generate_summaries
+        )
         mocs.write_mocs(temp_book_root_path, title, author, year, atomic_chapters)
 
         # 5. Link Verification

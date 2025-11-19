@@ -44,36 +44,40 @@ def _clean_repeated_headers_footers_structured(pages_structured_text: list[list[
 
 def extract_text_with_pymupdf(pdf_path) -> list[list[dict]]:
     """
-    Extracts text and basic font information (size, bold) from a PDF using PyMuPDF.
+    Extracts text and detailed font information (font, size, bold) from a PDF using PyMuPDF.
     Returns a list of lists, where each inner list represents a page,
-    and contains dictionaries for each line with 'text', 'size', 'is_bold'.
+    and contains dictionaries for each line with 'text', 'font', 'size', 'is_bold'.
     """
     all_pages_structured_text = []
     with fitz.open(pdf_path) as doc:
         for page_num in range(doc.page_count):
             page = doc.load_page(page_num)
-            text_blocks = page.get_text("dict") # Get text in dictionary format
+            # Use the "dict" format, which is an alias for "json" with more structure.
+            text_blocks = page.get_text("dict", flags=fitz.TEXT_PRESERVE_LIGATURES)
             
             page_lines = []
-            for block in text_blocks['blocks']:
-                if block['type'] == 0: # Text block
-                    for line in block['lines']:
-                        line_text = ""
-                        line_font_sizes = []
-                        line_is_bold = False
-                        
-                        for span in line['spans']:
-                            line_text += span['text']
-                            line_font_sizes.append(span['size'])
-                            if 'bold' in span['font'].lower(): # Check for 'bold' in font name
-                                line_is_bold = True
-                        
-                        if line_text.strip(): # Only add non-empty lines
-                            # Use the average or max font size for the line
-                            avg_font_size = sum(line_font_sizes) / len(line_font_sizes) if line_font_sizes else 0
+            if 'blocks' in text_blocks:
+                for block in text_blocks['blocks']:
+                    if block.get('type') == 0: # Text block
+                        for line in block.get('lines', []):
+                            if not line.get('spans'): continue
+
+                            # Combine text from all spans in the line
+                            line_text = "".join(span.get('text', '') for span in line['spans']).strip()
+                            if not line_text: continue
+
+                            # --- Font Style Logic ---
+                            # Use the style of the first span as representative for the line.
+                            first_span = line['spans'][0]
+                            line_font = first_span.get('font', 'Unknown')
+                            line_size = first_span.get('size', 0)
+                            # The 'flags' integer is a bitmask. Bold is the 5th bit (2**4).
+                            line_is_bold = (first_span.get('flags', 0) & 2**4) > 0
+
                             page_lines.append({
-                                "text": line_text.strip(),
-                                "size": avg_font_size,
+                                "text": line_text,
+                                "font": line_font,
+                                "size": line_size,
                                 "is_bold": line_is_bold,
                                 "y0": line['bbox'][1],
                                 "y1": line['bbox'][3]

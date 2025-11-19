@@ -4,63 +4,45 @@ from .indice_detector import TOCEntry, _normalize_title
 from ..limpieza.normalizador import normalize_text
 from collections import Counter # ADDED: Import Counter for font size analysis
 
-def _find_headers_with_toc(structured_lines: List[Dict], toc_entries: List[TOCEntry]) -> List[dict]:
-    """Finds chapter headers in structured text that match TOC entries, using font info."""
-    toc_titles_norm = {_normalize_title(e.title) for e in toc_entries}
+def _find_headers_with_toc(structured_lines: List[Dict], toc_entries: List[TOCEntry]) -> List[Dict]:
+    """
+    Finds chapter headers by performing a flexible, substring match of TOC entries against the document text.
+    Returns a list of dictionaries, each containing the index, title, and crucially, the hierarchy level.
+    """
     header_locations = []
-
-    # Calculate average font size for the document to identify larger headings
-    all_font_sizes = [line['size'] for line in structured_lines if line['size'] > 0]
-    if not all_font_sizes:
-        avg_font_size = 12.0 # Default if no font sizes found
-    else:
-        avg_font_size = sum(all_font_sizes) / len(all_font_sizes)
     
-    large_font_threshold = avg_font_size * 1.2 
+    # Pre-normalize the TOC titles for efficient searching
+    normalized_toc = [(entry, _normalize_title(entry.title)) for entry in toc_entries]
 
-    patterns = {
-        'single_line_numbered': re.compile(r"^\s*(?P<num>\d+)\s+(?P<title>[A-ZÁÉÍÓÚÑ].+?)\s*$"),
-        'single_line_chapter_prefix': re.compile(r"^\s*Cap[ií]tulo\s+(?P<num>\d+|[IVXLCDM]+)\s*[:.-]?\s*(?P<title>.+?)\s*$", re.IGNORECASE),
-    }
+    # Use a set to avoid re-processing the same line index
+    found_indices = set()
 
-    i = 0
-    while i < len(structured_lines):
-        line_data = structured_lines[i]
+    for i, line_data in enumerate(structured_lines):
+        if i in found_indices:
+            continue
+
         line_text = line_data['text'].strip()
         if not line_text:
-            i += 1
             continue
 
-        matched = False
-        for key, pattern in patterns.items():
-            match = pattern.match(line_text)
-            if match:
-                title = match.group('title')
-                if _normalize_title(title) in toc_titles_norm:
-                    header_locations.append({"idx": i, "title": title, "raw_title": line_text})
-                    matched = True
-                    break
-        if matched:
-            i += 1
-            continue
+        normalized_line = _normalize_title(line_text)
 
-        # Also consider font-based matching for TOC entries
-        if (line_data['is_bold'] or line_data['size'] > large_font_threshold) and \
-           _normalize_title(line_text) in toc_titles_norm:
-            header_locations.append({"idx": i, "title": line_text, "raw_title": line_text})
-            i += 1
-            continue
+        # Iterate through TOC entries to find a substring match
+        for toc_entry, normalized_toc_title in normalized_toc:
+            if normalized_toc_title in normalized_line:
+                # Use the full line text from the PDF as the title, as it's more complete
+                # and capture the level from the matched TOC entry.
+                header_locations.append({
+                    "idx": i,
+                    "title": line_text,
+                    "raw_title": line_text,
+                    "level": toc_entry.level
+                })
+                found_indices.add(i)
+                # Break to ensure we only match one TOC entry per line
+                break
 
-        if re.fullmatch(r'\s*\d+\s*', line_text) and i + 1 < len(structured_lines):
-            next_line_data = structured_lines[i+1]
-            next_line_text = next_line_data['text'].strip()
-            if next_line_text and _normalize_title(next_line_text) in toc_titles_norm:
-                header_locations.append({"idx": i, "title": next_line_text, "raw_title": f"{line_text}\n{next_line_text}"})
-                i += 2
-                continue
-
-        i += 1
-
+    print(f"Flexible TOC matching found {len(header_locations)} header(s).")
     return header_locations
 
 def _find_headers_with_fallback(structured_lines: List[Dict]) -> List[dict]:
@@ -167,7 +149,10 @@ def split_into_chapters(pages_structured_text: List[List[Dict]], toc_entries: Li
 
         kind = "special" if any(keyword in _normalize_title(header['title']) for keyword in special_section_keywords) else "chapter"
 
-        chapter_data = {"title": header['title'], "raw_title": header['raw_title'], "kind": kind, "sections": sections}
+        # The level is now directly available in the header dictionary
+        level = header.get('level', 1)
+
+        chapter_data = {"title": header['title'], "raw_title": header['raw_title'], "kind": kind, "level": level, "sections": sections}
         if kind == "chapter":
             chapter_data["number"] = chapter_number_counter
             chapter_number_counter += 1
@@ -177,89 +162,112 @@ def split_into_chapters(pages_structured_text: List[List[Dict]], toc_entries: Li
     print(f"Successfully split the document into {len(chapters)} main chapter(s)/section(s).")
     return chapters
 
+def _get_dominant_style(structured_content: List[Dict]) -> (str, float, bool):
+    """
+    Determines the most common font style (font_name, size, is_bold) in a list of structured text lines.
+    This is assumed to be the body text style.
+    """
+    if not structured_content:
+        return "Arial", 12.0, False # Default fallback
+
+    style_counter = Counter()
+    for line in structured_content:
+        # Heuristic: Consider lines with more than 3 words as body text to avoid titles skewing the result.
+        if len(line['text'].split()) > 3:
+            style_key = (line['font'], round(line['size']), line['is_bold'])
+            style_counter[style_key] += 1
+
+    if not style_counter:
+        # If no lines match the heuristic, fall back to a simpler count
+        for line in structured_content:
+            style_key = (line['font'], round(line['size']), line['is_bold'])
+            style_counter[style_key] += 1
+
+    if not style_counter: # If still empty
+        return "Arial", 12.0, False
+
+    # The dominant style is the most frequent one
+    dominant_style_key = style_counter.most_common(1)[0][0]
+    return dominant_style_key[0], dominant_style_key[1], dominant_style_key[2]
+
 def split_chapter_into_sections(chapter_structured_content: List[Dict], chapter_title: str) -> List[dict]:
-    """Splits a chapter's structured content into sections based on internal subtitles and font information."""
+    """
+    Splits a chapter's content into sections based on a conservative, style-based subtitle detection.
+    A line is considered a subtitle if its style is different from the dominant body text style
+    and it meets certain structural criteria.
+    """
     if not chapter_structured_content:
         return []
+
+    # 1. Determine the dominant style of the body text for this chapter
+    dom_font, dom_size, dom_bold = _get_dominant_style(chapter_structured_content)
+    print(f"Chapter '{chapter_title[:30]}...': Dominant style: {dom_font}, {dom_size}pt, Bold={dom_bold}")
 
     sections = []
     section_breaks = []
 
-    # Calculate average font size of the chapter's body text for comparison
-    # Exclude very large fonts which might be titles themselves, skewing the average
-    font_sizes = [line['size'] for line in chapter_structured_content if line['size'] > 0 and len(line['text'].split()) > 5]
-    if not font_sizes:
-        # If no lines are long enough, use all available sizes
-        font_sizes = [line['size'] for line in chapter_structured_content if line['size'] > 0]
-    
-    if not font_sizes:
-        avg_body_font_size = 10.0 # A reasonable default
-    else:
-        # Use the most common font size as the body text size
-        avg_body_font_size = Counter(font_sizes).most_common(1)[0][0]
-
-    # A subtitle is slightly larger than the body text.
-    subtitle_font_threshold = avg_body_font_size + 0.5 
-
-    print(f"Chapter '{chapter_title[:30]}...': Avg body font size: {avg_body_font_size:.2f}, Subtitle threshold: {subtitle_font_threshold:.2f}")
-
+    # 2. Iterate through lines to find potential subtitles
     for i, line_data in enumerate(chapter_structured_content):
         stripped_text = line_data['text'].strip()
         if not stripped_text:
             continue
 
-        # --- More Lenient Subtitle Heuristics ---
+        # --- Conservative Subtitle Heuristics ---
         is_subtitle = False
-        word_count = len(stripped_text.split())
         
-        # Condition 1: Text is bold and is short (like a title)
-        is_bold_and_short = line_data['is_bold'] and (1 <= word_count < 15)
-        
-        # Condition 2: Text is noticeably larger and is short
-        is_larger_and_short = line_data['size'] >= subtitle_font_threshold and (1 <= word_count < 15)
+        # Style comparison
+        line_font = line_data['font']
+        line_size = round(line_data['size'])
+        line_bold = line_data['is_bold']
 
-        # A line is a subtitle if it meets either condition, and doesn't look like a normal sentence
-        if (is_bold_and_short or is_larger_and_short) and not stripped_text.endswith(('.', '?', '!')):
-             # Additional check: ensure it's not just a few capitalized words in a sentence.
-             # A simple check is to see if it starts with an uppercase letter.
-            if stripped_text[0].isupper():
-                is_subtitle = True
+        style_is_different = (line_font != dom_font or line_size != dom_size or line_bold != dom_bold)
+        
+        # Structural checks
+        word_count = len(stripped_text.split())
+        is_short = 1 <= word_count < 15
+        ends_like_title = not stripped_text.endswith(('.', '?', '!', ':', ','))
+
+        # A line is a subtitle if its style deviates and it looks like a title
+        if style_is_different and is_short and ends_like_title:
+            # Avoid single-word, all-caps lines which might be artifacts, unless they are significantly larger
+            if word_count == 1 and stripped_text.isupper() and line_size <= dom_size * 1.2:
+                continue
+
+            is_subtitle = True
         
         if is_subtitle:
             section_breaks.append({"title": stripped_text, "idx": i})
-            print(f"  -> Found potential subtitle: '{stripped_text}'")
+            print(f"  -> Found potential subtitle: '{stripped_text}' (Style: {line_font}, {line_size}pt, Bold={line_bold})")
 
-    # If no subtitles were found, the whole chapter is one section.
+    # 3. Structure the chapter based on the found subtitles
     if not section_breaks:
         print("  -> No subtitles found. Treating chapter as a single note.")
         full_content_text = normalize_text(chapter_structured_content)
         return [{"title": chapter_title, "content": full_content_text}]
 
-    # If subtitles were found, split the content accordingly.
     print(f"  -> Splitting chapter into {len(section_breaks) + 1} sections based on subtitles.")
     
-    # 1. Content before the first subtitle (uses the main chapter title)
-    content_before_first_break = normalize_text(chapter_structured_content[:section_breaks[0]['idx']])
-    if content_before_first_break:
+    sections = []
+    last_idx = 0
+
+    # The first section is the content before the first subtitle
+    first_break_idx = section_breaks[0]['idx']
+    content_before_first_break = normalize_text(chapter_structured_content[0:first_break_idx])
+    if content_before_first_break.strip():
         sections.append({"title": chapter_title, "content": content_before_first_break})
 
-    # 2. Content for each subtitle
+    # Create a section for each subtitle found
     for i, break_info in enumerate(section_breaks):
-        start_idx = break_info['idx']
+        section_title = break_info['title']
         
-        # The content for this section starts AFTER the subtitle line
-        content_start_idx = start_idx + 1
+        start_idx = break_info['idx'] + 1
+        end_idx = section_breaks[i + 1]['idx'] if i + 1 < len(section_breaks) else len(chapter_structured_content)
         
-        # The content ends right before the NEXT subtitle line
-        content_end_idx = section_breaks[i + 1]['idx'] if i + 1 < len(section_breaks) else len(chapter_structured_content)
-        
-        section_content_structured = chapter_structured_content[content_start_idx:content_end_idx]
+        section_content_structured = chapter_structured_content[start_idx:end_idx]
         section_content_text = normalize_text(section_content_structured)
         
-        # The title is the subtitle line itself, plus any following subtitle-like lines
-        section_title = chapter_structured_content[start_idx]['text']
-        
-        if section_content_text:
+        if section_content_text.strip():
             sections.append({"title": section_title, "content": section_content_text})
 
-    return [s for s in sections if s.get('content')]
+    # Return only sections that have actual content
+    return [s for s in sections if s.get('content', '').strip()]
