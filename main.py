@@ -31,7 +31,7 @@ def get_pdf_metadata(pdf_path):
         logging.warning(f"Could not extract metadata from PDF: {e}")
         return '', '', ''
 
-def process_pdf(pdf_path, title, author, year, output_dir, translate_to=None, toc_from_csv=None, thematic_folder=None, theme_nomenclature=None, generate_summaries=False):
+def process_pdf(pdf_path, title, author, year, output_dir, translate_to=None, toc_from_csv=None, thematic_folder=None, theme_nomenclature=None, use_ai=True):
     """
     Processes a single PDF file into an atomic Obsidian vault.
 
@@ -45,7 +45,7 @@ def process_pdf(pdf_path, title, author, year, output_dir, translate_to=None, to
         toc_from_csv (List[TOCEntry], optional): An explicit list of chapter entries from CSV. Defaults to None.
         thematic_folder (str, optional): The thematic folder for domain tags.
         theme_nomenclature (str, optional): The theme nomenclature for sub-domain tags.
-        generate_summaries (bool): Whether to generate summaries for atomic notes.
+        use_ai (bool): Whether to use the AI for metadata generation.
     """
     # --- Temporary Directory Setup ---
     temp_dir = tempfile.mkdtemp()
@@ -129,7 +129,7 @@ def process_pdf(pdf_path, title, author, year, output_dir, translate_to=None, to
             chapters, title, author, year, temp_book_root_path,
             thematic_folder=thematic_folder,
             theme_nomenclature=theme_nomenclature,
-            generate_summaries=generate_summaries
+            use_ai=use_ai
         )
         mocs.write_mocs(temp_book_root_path, title, author, year, atomic_chapters)
 
@@ -167,6 +167,7 @@ def main():
     parser.add_argument("--ano", help="Publication year of the book.")
     parser.add_argument("--salida", default="D:\\github\\Libros Atomicos", help="Output directory for the atomic vault.")
     parser.add_argument("--traducir-a", help="Translate content to the specified language (e.g., 'es').")
+    parser.add_argument("--sin-ia", action="store_true", help="Desactiva la generación de metadatos con IA y usa el fallback local.")
 
     args = parser.parse_args()
 
@@ -191,6 +192,7 @@ def main():
         author=author, 
         year=year, 
         output_dir=args.salida, 
-        translate_to=args.traducir_a
+        translate_to=args.traducir_a,
+        use_ai=not args.sin_ia
     )
 
