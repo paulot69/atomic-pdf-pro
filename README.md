@@ -76,6 +76,49 @@ python main.py <ruta_al_pdf> [--titulo "<Título>"] [--autor "<Autor>"] [--ano "
 -   `--ano`: Especifica un año diferente.
 -   `--salida`: Define una ruta de salida personalizada para el vault atómico.
 -   `--traducir-a`: Activa la traducción. Ejemplo: `--traducir-a "es"` para traducir a español.
+-   `--sin-ia`: (V2.0+) Desactiva la generación de resúmenes y tags con IA, usando el método de fallback local.
+
+## Automatización con Google Sheets
+
+Para un procesamiento en lote y centralizado, puedes usar `sheet_runner.py` para orquestar la creación de vaults directamente desde una hoja de cálculo de Google Sheets.
+
+**Sintaxis:**
+```bash
+# Procesar todos los libros nuevos marcados en la hoja
+python sheet_runner.py
+
+# Procesar todos los libros nuevos sin usar la IA
+python sheet_runner.py --sin-ia
+```
+
+### Configuración
+
+1.  **Preparar la Hoja de Google:**
+    *   Asegúrate de que tu hoja de cálculo tenga, como mínimo, las siguientes columnas:
+        *   `ATOMIZAR LIBRO.` (para marcar con "SI" los libros a procesar).
+        *   `URL LOCAL` (con la ruta completa al archivo PDF en tu sistema).
+        *   `Título Original del Libro`
+        *   `Autor (Nombre Apellido)`
+        *   `Año de Publicación`
+
+2.  **Publicar la Hoja como CSV:**
+    *   En Google Sheets, ve a `Archivo` > `Compartir` > `Publicar en la web`.
+    *   En la ventana que aparece, selecciona `Toda la hoja` (o la hoja específica que quieres usar).
+    *   En el menú desplegable, elige `Valores separados por comas (.csv)`.
+    *   Haz clic en `Publicar`.
+    *   Copia el enlace generado. Será algo como: `https://docs.google.com/spreadsheets/d/e/.../pub?output=csv`.
+
+3.  **Configurar el `.env`:**
+    *   Abre tu archivo `.env` (o crea uno a partir de `.env.example`).
+    *   Pega el enlace que copiaste en la variable `SHEET_CSV_URL`.
+    *   Asegúrate también de que tu `GEMINI_API_KEY` esté configurada si deseas usar la generación de metadatos por IA.
+
+    ```dotenv
+    GEMINI_API_KEY=tu_clave_de_api_aqui
+    SHEET_CSV_URL=https://docs.google.com/spreadsheets/d/e/.../pub?output=csv
+    ```
+
+Una vez configurado, simplemente ejecuta `python sheet_runner.py` y el script se encargará de buscar, validar y procesar todos los libros que hayas marcado.
 
 ## Estructura de Salida del Vault
 

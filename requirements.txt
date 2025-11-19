@@ -10,3 +10,4 @@ PyPDF2
 requests
 google-generativeai
 python-dotenv
+pandas
