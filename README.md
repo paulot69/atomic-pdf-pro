@@ -50,11 +50,11 @@ Antes de usar el programa, es necesario configurar el entorno.
 
 ## Uso
 
-Existen dos modos principales para ejecutar el programa.
+El programa tiene dos modos de ejecución. Para el flujo de trabajo principal y automatizado, solo necesitas usar el **Modo 2**.
 
-### Modo 1: Procesar un Solo PDF
+### Modo 1: Procesar un Solo PDF (Manual)
 
-Ideal para procesar un archivo a la vez. El script te preguntará interactivamente si falta algún dato (título, autor, etc.).
+Este modo es útil para procesar un único archivo de forma rápida y aislada. Se utiliza el script `main.py`, que es el motor de procesamiento principal. Necesita que le pases la ruta del PDF directamente.
 
 **Sintaxis:**
 ```bash
@@ -65,9 +65,11 @@ python main.py <ruta_al_pdf> [argumentos_opcionales]
 python main.py "D:\Mis Libros\Clean Code.pdf"
 ```
 
-### Modo 2: Procesar en Lote desde Google Sheets
+### Modo 2: Procesar en Lote desde Google Sheets (Automático)
 
-El modo recomendado para un flujo de trabajo automatizado. El script lee tu hoja de Google Sheets y procesa todos los libros que hayas marcado.
+Este es el modo recomendado para el flujo de trabajo principal. Utiliza el script `sheet_runner.py`, que actúa como un orquestador: lee tu hoja de Google Sheets, encuentra los libros marcados con "SI" y llama a `main.py` por cada uno, pasándole automáticamente la ruta y los metadatos.
+
+Con este modo, **no necesitas pasar ninguna ruta manualmente**.
 
 **Sintaxis:**
 ```bash
@@ -91,3 +93,18 @@ Tu hoja de cálculo debe contener, como mínimo, las siguientes columnas:
 -   `--salida`: Define una ruta de salida personalizada.
 -   `--traducir-a`: Activa la traducción a un idioma (ej: "es").
 -   `--sin-ia`: Desactiva la generación de metadatos con IA.
+
+## Estructura de Salida del Vault
+
+La estructura generada es predecible y organizada:
+
+```
+[Directorio de Salida]/
+└── [Año] - [Título del Libro] - [Autor]/
+    ├── MOC - [Título del Libro].md
+    ├── Capítulo 01 - [Título del Capítulo]/
+    │   ├── MOC - [Título del Capítulo].md
+    │   ├── 1.1 - [Concepto Atómico 1].md
+    │   └── ...
+    └── ...
+```
