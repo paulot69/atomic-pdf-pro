@@ -91,8 +91,35 @@ python sheet_runner.py
 python sheet_runner.py --sin-ia
 ```
 
+<<<<<<< HEAD
 **Requisitos de la Hoja de Cálculo:**
 La hoja debe tener las siguientes columnas (el script normaliza los nombres, así que mayúsculas/minúsculas no importan):
+=======
+### Modo 3: Panel Web / Local (Interfaz Gráfica)
+
+Esta es la forma recomendada y más visual de utilizar la herramienta. Proporciona un panel de control (similar a una app de escritorio) donde puedes seleccionar libros, configurar opciones avanzadas y ver el progreso en tiempo real.
+
+**Cómo iniciarlo:**
+```bash
+python start_gui.py
+```
+
+Este comando iniciará el servidor y **abrirá automáticamente tu navegador** con el panel de control listo para usar.
+
+**Funcionalidades del Panel:**
+-   **Modo Un Solo Libro:** Selecciona un libro de tu lista, pega la estructura del índice manualmente si lo deseas, y procésalo al instante.
+-   **Modo Lote (Batch):** Procesa automáticamente todos los libros marcados con "SI" en la hoja de cálculo.
+-   **Consola en Tiempo Real:** Visualiza los logs de ejecución directamente en la web.
+-   **Configuración Avanzada:** Activa/desactiva la IA o la traducción con simples interruptores.
+
+**Requisitos de la Hoja:**
+Tu hoja de cálculo debe contener, como mínimo, las siguientes columnas:
+-   `ATOMIZAR LIBRO.` (con el valor "SI" para los libros a procesar).
+-   `URL LOCAL` (con la ruta completa al archivo PDF).
+-   `Título Original del Libro`
+-   `Autor (Nombre Apellido)`
+-   `Año de Publicación`
+>>>>>>> origin/web-plugin-dashboard
 
 | Columna | Descripción | Ejemplo |
 | :--- | :--- | :--- |

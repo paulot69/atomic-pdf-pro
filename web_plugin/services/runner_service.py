@@ -30,6 +30,16 @@ class RunnerService:
         if year:
             cmd.extend(["--ano", str(year)])
 
+<<<<<<< HEAD
+=======
+        # Note on index_content:
+        # Currently, main.py does not accept a CLI argument for the raw index structure text.
+        # The web interface ensures this data is written to the Google Sheet (Column L)
+        # before execution. If main.py is configured to read from the sheet or if a future
+        # update adds an argument (e.g., --indice-file), this can be updated.
+        # For now, we rely on the Sheet Update performed by SheetManager.
+
+>>>>>>> origin/web-plugin-dashboard
         # Advanced Options
         if no_ai:
             cmd.extend(["--sin-ia"])

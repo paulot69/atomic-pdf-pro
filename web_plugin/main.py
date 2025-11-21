@@ -3,6 +3,13 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from web_plugin.routers import api, websocket
+<<<<<<< HEAD
+=======
+from dotenv import load_dotenv
+
+# Load environment variables from .env
+load_dotenv()
+>>>>>>> origin/web-plugin-dashboard
 
 app = FastAPI(title="PDF Atomic Pro - Web Plugin")
 
@@ -26,4 +33,9 @@ async def ui_redirect(request: Request):
 
 if __name__ == "__main__":
     import uvicorn
+<<<<<<< HEAD
     uvicorn.run("web_plugin.main:app", host="0.0.0.0", port=8000, reload=True)
+=======
+    # Port updated to 8080 as requested
+    uvicorn.run("web_plugin.main:app", host="0.0.0.0", port=8080, reload=True)
+>>>>>>> origin/web-plugin-dashboard
