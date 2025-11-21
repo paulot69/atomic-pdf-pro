@@ -1,6 +1,6 @@
 import re
 
-def _sanitize_title_for_filename(title: str, max_length: int = 100) -> str:
+def _sanitize_title_for_filename(title: str, max_length: int = 50) -> str:
     """
     Sanitizes a title to be used in a filename, removing invalid characters,
     replacing spaces with hyphens, and limiting the length.

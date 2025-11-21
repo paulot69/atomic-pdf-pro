@@ -10,10 +10,22 @@ from pdf_atomic_pro.extractor import pdf_reader, ocr_handler
 from pdf_atomic_pro.estructura import indice_detector, jerarquia
 from pdf_atomic_pro.generacion import notas_atomicas, mocs
 from pdf_atomic_pro.integridad import verificador_links
+import sys
 from pdf_atomic_pro.traduccion import traductor
 
 # Setup logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+log_file_path = os.path.join(os.path.dirname(__file__), 'main_debug.log')
+# Clear previous log file
+if os.path.exists(log_file_path):
+    os.remove(log_file_path)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(log_file_path),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
 
 def get_pdf_metadata(pdf_path):
     """Extracts metadata (title, author, year) from the PDF."""
@@ -150,9 +162,11 @@ def process_pdf(pdf_path, title, author, year, output_dir, translate_to=None, to
         # shutil.move works across different drives (like from temp C: to G:)
         shutil.move(temp_book_root_path, final_output_path)
         logging.info(f"Processing successfully completed. Vault saved at: {final_output_path}")
+        return True
 
     except Exception as e:
         logging.error(f"A fatal error occurred during processing: {e}", exc_info=True)
+        return False
 
     finally:
         # --- Temporary Directory Cleanup ---
@@ -165,7 +179,7 @@ def main():
     parser.add_argument("--titulo", help="Title of the book.")
     parser.add_argument("--autor", help="Author of the book.")
     parser.add_argument("--ano", help="Publication year of the book.")
-    parser.add_argument("--salida", default="D:\\github\\Libros Atomicos", help="Output directory for the atomic vault.")
+    parser.add_argument("--salida", default="D:\\02_DEV_LAB\\00_GITHUB_REPOS\\Libros_Atomicos", help="Output directory for the atomic vault.")
     parser.add_argument("--traducir-a", help="Translate content to the specified language (e.g., 'es').")
     parser.add_argument("--sin-ia", action="store_true", help="Desactiva la generación de metadatos con IA y usa el fallback local.")
 
@@ -186,7 +200,7 @@ def main():
         year = input("Please enter the publication year of the book: ")
     
     # Call the main processing function
-    process_pdf(
+    success = process_pdf(
         pdf_path=args.pdf_path, 
         title=title, 
         author=author, 
@@ -195,4 +209,10 @@ def main():
         translate_to=args.traducir_a,
         use_ai=not args.sin_ia
     )
+
+    if not success:
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()
 

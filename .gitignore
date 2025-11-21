@@ -1,4 +1,18 @@
-__pycache__/
-*.pyc
-/test_output/
+# --- SEGURIDAD CRÍTICA ---
+llaves/
+config/
 .env
+.env.example
+torre_credentials.json
+
+# --- CREDENCIALES SUELTAS ---
+*credentials.json
+*secret.json
+*key.json
+
+# --- LOGS Y BASURA (No subir esto) ---
+*.log
+main_debug.log
+processed_history.log
+__pycache__/
+.DS_Store

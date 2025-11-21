@@ -75,7 +75,7 @@ def main():
             print(f"[WARN] Fila {index+2}: La ruta del archivo está vacía. Saltando.")
             continue
 
-        filepath = filepath.strip()
+        filepath = filepath.strip(' "')
 
         print("-" * 50)
 
@@ -115,8 +115,12 @@ def main():
 
         # --- Ejecución del subproceso ---
         try:
-            result = subprocess.run(command, check=True, capture_output=True, text=True, encoding='utf-8')
+            result = subprocess.run(command, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace')
             print(result.stdout)
+            if result.stderr:
+                print("--- Stderr ---")
+                print(result.stderr)
+                print("--------------")
             print(f"[LISTO] El libro '{title}' fue procesado correctamente.")
             _add_to_history(filepath)
 
