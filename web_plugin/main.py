@@ -30,5 +30,6 @@ async def ui_redirect(request: Request):
 
 if __name__ == "__main__":
     import uvicorn
-    # Port updated to 8080 as requested
-    uvicorn.run("web_plugin.main:app", host="0.0.0.0", port=8080, reload=True)
+    # Defaults for direct run, though start_gui.py overrides this.
+    # Ensuring localhost for security.
+    uvicorn.run("web_plugin.main:app", host="127.0.0.1", port=8080, reload=True)

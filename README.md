@@ -80,22 +80,23 @@ python sheet_runner.py
 python sheet_runner.py --sin-ia
 ```
 
-### Modo 3: Panel Web / Local (Interfaz Gráfica)
+### Modo 3: Panel de Control (Interfaz Gráfica Recomendada)
 
-Esta es la forma recomendada y más visual de utilizar la herramienta. Proporciona un panel de control (similar a una app de escritorio) donde puedes seleccionar libros, configurar opciones avanzadas y ver el progreso en tiempo real.
+Esta es la forma principal de utilizar la herramienta. Proporciona una interfaz visual local (tipo aplicación de escritorio) para gestionar todo el proceso sin tocar comandos.
 
 **Cómo iniciarlo:**
 ```bash
 python start_gui.py
 ```
 
-Este comando iniciará el servidor y **abrirá automáticamente tu navegador** con el panel de control listo para usar.
+Este comando iniciará la aplicación local y **abrirá automáticamente tu navegador** con el panel de control.
 
-**Funcionalidades del Panel:**
--   **Modo Un Solo Libro:** Selecciona un libro de tu lista, pega la estructura del índice manualmente si lo deseas, y procésalo al instante.
--   **Modo Lote (Batch):** Procesa automáticamente todos los libros marcados con "SI" en la hoja de cálculo.
--   **Consola en Tiempo Real:** Visualiza los logs de ejecución directamente en la web.
--   **Configuración Avanzada:** Activa/desactiva la IA o la traducción con simples interruptores.
+**Funcionalidades:**
+-   **Gestión Visual:** Selecciona libros directamente desde un menú desplegable.
+-   **Modo Un Solo Libro:** Procesa un libro individualmente, con la opción de pegar su estructura de índice.
+-   **Modo Lote (Batch):** Procesa todos los libros marcados con "SI" en tu hoja de cálculo con un solo clic.
+-   **Consola Integrada:** Verás el progreso y los logs en tiempo real en la ventana de la aplicación.
+-   **Configuración:** Interruptores fáciles para desactivar la IA o activar traducciones.
 
 **Requisitos de la Hoja:**
 Tu hoja de cálculo debe contener, como mínimo, las siguientes columnas:
