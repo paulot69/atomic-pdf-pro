@@ -67,7 +67,7 @@ for (const page of pages) {
     
     return "\n".join(footer_parts)
 
-def process_and_write_atomic_notes(chapters: List[Dict], book_title: str, author: str, year: str, book_root: str, thematic_folder: str = None, theme_nomenclature: str = None, use_ai: bool = True) -> List[Dict]:
+def process_and_write_atomic_notes(chapters: List[Dict], book_title: str, author: str, year: str, book_root: str, thematic_folder: str = None, theme_nomenclature: str = None, use_ai: bool = True, generate_summaries: bool = True) -> List[Dict]:
     """
     Processes chapters into atomic notes and writes them to the vault.
     """
@@ -99,20 +99,23 @@ def process_and_write_atomic_notes(chapters: List[Dict], book_title: str, author
             if use_ai and metadata_engine and cleaned_content:
                 try:
                     ai_metadata = metadata_engine.get_metadata(cleaned_content)
-                    summary = ai_metadata.get('summary', '')
+                    if generate_summaries:
+                        summary = ai_metadata.get('summary', '')
                     semantic_tags = ai_metadata.get('tags', [])
 
-                    # Fallback if AI returns empty summary
-                    if not summary:
+                    # Fallback if AI returns empty summary but we wanted one
+                    if generate_summaries and not summary:
                         print(f"Warning: AI returned empty metadata for note '{atomic_note_title}'. Using fallback summary.")
                         summary = generate_fallback_summary(atomic_note_content)
 
                 except Exception as e:
                     print(f"Warning: AI failed for note '{atomic_note_title}', using fallback. Error: {e}")
-                    summary = generate_fallback_summary(atomic_note_content)
+                    if generate_summaries:
+                        summary = generate_fallback_summary(atomic_note_content)
             else:
                  # Use fallback if AI is disabled or content is empty
-                 summary = generate_fallback_summary(atomic_note_content)
+                 if generate_summaries:
+                    summary = generate_fallback_summary(atomic_note_content)
 
 
             decimal_number = f"{current_chapter_number}.{note_num_counter}" if current_chapter_number is not None else None

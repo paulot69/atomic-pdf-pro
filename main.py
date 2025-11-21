@@ -43,7 +43,7 @@ def get_pdf_metadata(pdf_path):
         logging.warning(f"Could not extract metadata from PDF: {e}")
         return '', '', ''
 
-def process_pdf(pdf_path, title, author, year, output_dir, translate_to=None, toc_from_csv=None, thematic_folder=None, theme_nomenclature=None, use_ai=True):
+def process_pdf(pdf_path, title, author, year, output_dir, translate_to=None, toc_from_csv=None, thematic_folder=None, theme_nomenclature=None, use_ai=True, generate_summaries=True):
     """
     Processes a single PDF file into an atomic Obsidian vault.
 
@@ -58,6 +58,7 @@ def process_pdf(pdf_path, title, author, year, output_dir, translate_to=None, to
         thematic_folder (str, optional): The thematic folder for domain tags.
         theme_nomenclature (str, optional): The theme nomenclature for sub-domain tags.
         use_ai (bool): Whether to use the AI for metadata generation.
+        generate_summaries (bool): Whether to generate summaries for each atomic note.
     """
     # --- Temporary Directory Setup ---
     temp_dir = tempfile.mkdtemp()
@@ -141,7 +142,8 @@ def process_pdf(pdf_path, title, author, year, output_dir, translate_to=None, to
             chapters, title, author, year, temp_book_root_path,
             thematic_folder=thematic_folder,
             theme_nomenclature=theme_nomenclature,
-            use_ai=use_ai
+            use_ai=use_ai,
+            generate_summaries=generate_summaries
         )
         mocs.write_mocs(temp_book_root_path, title, author, year, atomic_chapters)
 
