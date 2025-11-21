@@ -11,3 +11,9 @@ requests
 google-generativeai
 python-dotenv
 pandas
+fastapi
+uvicorn
+gspread
+oauth2client
+jinja2
+python-multipart
