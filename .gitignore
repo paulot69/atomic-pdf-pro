@@ -2,3 +2,6 @@ __pycache__/
 *.pyc
 /test_output/
 .env
+llaves/
+Libros Atomicos/
+config/

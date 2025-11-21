@@ -13,6 +13,21 @@
     -   **Semánticos (IA):** Generados por IA para facilitar el descubrimiento de temas, con reglas personalizables.
 -   **Auditoría de Tags:** Genera un reporte con todos los tags únicos utilizados en un libro, ideal para supervisar la IA.
 -   **Navegación Fluida:** Crea Mapas de Contenido (MOCs) y pies de página con `dataviewjs` para una exploración intuitiva.
+-   **Automatización con Google Sheets:** Permite gestionar una cola de libros y configuraciones desde una hoja de cálculo, utilizando una cuenta de servicio segura.
+
+## Estructura del Proyecto
+
+```
+pdf-atomic-pro/
+├── llaves/                # Credenciales de API (IGNORADO por git)
+├── Libros Atomicos/       # Salida por defecto de los vaults generados (IGNORADO por git)
+├── config/                # Reglas de taxonomía y configuración (IGNORADO por git)
+├── pdf_atomic_pro/        # Código fuente principal
+├── tests/                 # Tests unitarios
+├── sheet_runner.py        # Script orquestador para procesamiento por lotes
+├── main.py                # Script de procesamiento individual
+└── ...
+```
 
 ## Instalación
 
@@ -33,20 +48,22 @@ Antes de usar el programa, es necesario configurar el entorno.
 
 1.  **Crear el archivo `.env`:**
     *   Crea una copia del archivo `.env.example` y renómbrala a `.env`.
+    *   **SPREADSHEET_ID**: (Obligatorio para Modo 2) El ID de tu hoja de cálculo de Google. Lo encuentras en la URL: `https://docs.google.com/spreadsheets/d/[ESTE_ES_EL_ID]/edit`.
 
 2.  **Configurar la IA (Opcional):**
     *   Abre tu archivo `.env`.
     *   Añade tu clave de API de Google Gemini a la variable `GEMINI_API_KEY`.
     *   Si dejas esta clave vacía, el programa funcionará en modo local (sin IA).
 
-3.  **Configurar Google Sheets (Opcional, para modo en lote):**
-    *   Abre tu hoja de cálculo y ve a `Archivo` > `Compartir` > `Publicar en la web`.
-    *   Elige `Toda la hoja` (o la hoja específica) y `Valores separados por comas (.csv)`.
-    *   Copia el enlace generado y pégalo en la variable `SHEET_CSV_URL` de tu archivo `.env`.
+3.  **Configurar Google Service Account (Obligatorio para Modo 2):**
+    *   Crea una Service Account en Google Cloud Console.
+    *   Descarga el archivo JSON de la clave.
+    *   Renombra el archivo a `torre_credentials.json`.
+    *   Coloca el archivo en la carpeta `llaves/`.
+    *   **Importante:** Comparte tu hoja de Google Sheets (editor) con el correo electrónico de la Service Account (que aparece en el JSON `client_email`).
 
 4.  **Personalizar la Taxonomía de la IA (Avanzado):**
-    *   Puedes editar las reglas que sigue la IA para generar tags modificando el archivo: `config/taxonomy_rules.txt`.
-    *   Esto te permite añadir o quitar dominios y ajustar las instrucciones sin tocar el código.
+    *   Puedes editar las reglas que sigue la IA para generar tags modificando el archivo: `config/taxonomy_rules.txt` (si existe).
 
 ## Uso
 
@@ -54,22 +71,16 @@ El programa tiene dos modos de ejecución. Para el flujo de trabajo principal y 
 
 ### Modo 1: Procesar un Solo PDF (Manual)
 
-Este modo es útil para procesar un único archivo de forma rápida y aislada. Se utiliza el script `main.py`, que es el motor de procesamiento principal. Necesita que le pases la ruta del PDF directamente.
+Este modo es útil para procesar un único archivo de forma rápida y aislada. Se utiliza el script `main.py`.
 
 **Sintaxis:**
 ```bash
 python main.py <ruta_al_pdf> [argumentos_opcionales]
 ```
-**Ejemplo:**
-```bash
-python main.py "D:\Mis Libros\Clean Code.pdf"
-```
 
 ### Modo 2: Procesar en Lote desde Google Sheets (Automático)
 
-Este es el modo recomendado para el flujo de trabajo principal. Utiliza el script `sheet_runner.py`, que actúa como un orquestador: lee tu hoja de Google Sheets, encuentra los libros marcados con "SI" y llama a `main.py` por cada uno, pasándole automáticamente la ruta y los metadatos.
-
-Con este modo, **no necesitas pasar ninguna ruta manualmente**.
+Este es el modo recomendado. Utiliza `sheet_runner.py` para leer tu hoja de cálculo, autenticándose de forma segura con la Service Account.
 
 **Sintaxis:**
 ```bash
@@ -80,26 +91,35 @@ python sheet_runner.py
 python sheet_runner.py --sin-ia
 ```
 
-**Requisitos de la Hoja:**
-Tu hoja de cálculo debe contener, como mínimo, las siguientes columnas:
--   `ATOMIZAR LIBRO.` (con el valor "SI" para los libros a procesar).
--   `URL LOCAL` (con la ruta completa al archivo PDF).
--   `Título Original del Libro`
--   `Autor (Nombre Apellido)`
--   `Año de Publicación`
+**Requisitos de la Hoja de Cálculo:**
+La hoja debe tener las siguientes columnas (el script normaliza los nombres, así que mayúsculas/minúsculas no importan):
 
-## Argumentos Opcionales (para `main.py`)
--   `--titulo`, `--autor`, `--ano`: Especifican los metadatos del libro.
--   `--salida`: Define una ruta de salida personalizada.
--   `--traducir-a`: Activa la traducción a un idioma (ej: "es").
--   `--sin-ia`: Desactiva la generación de metadatos con IA.
+| Columna | Descripción | Ejemplo |
+| :--- | :--- | :--- |
+| `ATOMIZAR LIBRO` | Escribe "SI" para procesar. | `SI` |
+| `URL LOCAL` | Ruta absoluta al archivo PDF. | `C:\Libros\Clean Code.pdf` |
+| `Título Original del Libro` | Título para los metadatos. | `Clean Code` |
+| `Autor (Nombre Apellido)` | Autor del libro. | `Robert C. Martin` |
+| `Año de Publicación` | Año de publicación. | `2008` |
+| `INDICE` | (Opcional) Estructura jerárquica identada (4 espacios). | Ver abajo |
+| `CARPETA TEMÁTICA FINAL` | (Opcional) Carpeta raíz temática. | `Ingeniería de Software` |
+| `TEMA (PARA NOMENCLATURA)` | (Opcional) Prefijo para tags. | `dev` |
+| `GENERAR RESUMEN` | Escribe "SI" para activar resúmenes con IA. | `SI` |
 
-## Estructura de Salida del Vault
+**Ejemplo de Índice Personalizado (Columna INDICE):**
+```text
+Parte 1: Principios
+    Capítulo 1: Código Limpio
+Parte 2: Práctica
+    Capítulo 2: Nombres con Sentido
+```
 
-La estructura generada es predecible y organizada:
+## Salida
+
+Los vaults generados se guardarán por defecto en la carpeta `Libros Atomicos/` dentro del directorio del proyecto.
 
 ```
-[Directorio de Salida]/
+Libros Atomicos/
 └── [Año] - [Título del Libro] - [Autor]/
     ├── MOC - [Título del Libro].md
     ├── Capítulo 01 - [Título del Capítulo]/
@@ -108,3 +128,9 @@ La estructura generada es predecible y organizada:
     │   └── ...
     └── ...
 ```
+
+## Solución de Problemas (Troubleshooting)
+
+- **Error: "Spreadsheet not found"**: Verifica que el `SPREADSHEET_ID` en `.env` sea correcto y que hayas compartido la hoja con el email de la Service Account.
+- **Error de Credenciales**: Asegúrate de que `llaves/torre_credentials.json` existe y es un JSON válido.
+- **ImportError**: Ejecuta `pip install -r requirements.txt` para asegurar que tienes todas las librerías nuevas (`google-api-python-client`, etc.).
