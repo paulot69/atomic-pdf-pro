@@ -130,6 +130,42 @@
                     </div>
                 </div>
 
+                <!-- Advanced Options (Shared) -->
+                <div class="border-t border-gray-100 pt-6">
+                    <label class="text-base font-semibold text-gray-900 mb-4 block">Opciones de Procesamiento</label>
+                    <div class="space-y-4">
+
+                        <!-- No AI Toggle -->
+                        <div class="flex items-start">
+                            <div class="flex items-center h-5">
+                                <input id="no_ai" type="checkbox" x-model="noAi" class="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 rounded">
+                            </div>
+                            <div class="ml-3 text-sm">
+                                <label for="no_ai" class="font-medium text-gray-700">Modo Sin IA (--sin-ia)</label>
+                                <p class="text-gray-500">Desactiva la generación inteligente de resúmenes y tags. Más rápido, pero con menos metadatos.</p>
+                            </div>
+                        </div>
+
+                        <!-- Translation Toggle -->
+                        <div class="flex items-start">
+                            <div class="flex items-center h-5">
+                                <input id="translate" type="checkbox" x-model="translate" class="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 rounded">
+                            </div>
+                            <div class="ml-3 text-sm w-full">
+                                <label for="translate" class="font-medium text-gray-700">Traducción (--traducir-a)</label>
+                                <p class="text-gray-500 mb-2">Activa la traducción del contenido al idioma especificado.</p>
+
+                                <div x-show="translate" x-transition class="max-w-xs">
+                                    <input type="text" x-model="translateLang"
+                                        class="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                                        placeholder="es (código de idioma)">
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
                 <!-- Action Button -->
                 <div class="pt-4">
                     <button @click="process()"
@@ -153,7 +189,12 @@
         <!-- Terminal / Logs -->
         <div class="bg-gray-900 rounded-xl shadow-lg overflow-hidden border border-gray-700">
             <div class="bg-gray-800 px-4 py-2 flex justify-between items-center border-b border-gray-700">
-                <span class="text-gray-400 text-xs font-mono">Consola de Salida</span>
+                <div class="flex space-x-2">
+                    <div class="w-3 h-3 rounded-full bg-red-500"></div>
+                    <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+                    <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                </div>
+                <span class="text-gray-400 text-xs font-mono opacity-60">terminal — zsh</span>
                 <button @click="logs = ''" class="text-xs text-gray-500 hover:text-white">Limpiar</button>
             </div>
             <pre class="p-4 h-96 overflow-auto terminal-scroll text-xs font-mono leading-relaxed text-green-400" x-text="logs || '> Esperando comandos...'">
@@ -169,6 +210,9 @@
                 books: [],
                 selectedBookIndex: '',
                 structureContent: '',
+                noAi: false,
+                translate: false,
+                translateLang: 'es',
                 loading: false,
                 logs: '',
                 connected: false,
@@ -205,11 +249,6 @@
 
                     this.socket.onmessage = (event) => {
                         this.logs += event.data;
-                        // Auto-scroll to bottom (hacky but works for simple pre)
-                        // A better way is to use a ref and scrollTop, but Alpine handles binding.
-                        // We just ensure the element scrolls after render.
-                        // Since x-text updates content, we might need $nextTick logic if inside Alpine method,
-                        // but here we rely on browser rendering.
                     };
 
                     this.socket.onclose = () => {
@@ -225,17 +264,17 @@
 
                     try {
                         let url = '';
-                        let body = {};
+                        let body = {
+                            no_ai: this.noAi,
+                            translate_to: this.translate ? this.translateLang : ""
+                        };
 
                         if (this.mode === 'single') {
                             url = '/api/process/single';
-                            body = {
-                                row_index: parseInt(this.selectedBookIndex),
-                                structure_content: this.structureContent
-                            };
+                            body.row_index = parseInt(this.selectedBookIndex);
+                            body.structure_content = this.structureContent;
                         } else {
                             url = '/api/process/batch';
-                            body = {};
                         }
 
                         const res = await fetch(url, {
@@ -252,10 +291,6 @@
                     } catch (e) {
                         this.logs += `\n[ERROR] ${e.message}\n`;
                     } finally {
-                        // We keep loading true? Or false?
-                        // Process runs in background. So we enable button again?
-                        // Ideally we lock it until done, but we don't get a "done" signal via HTTP, only WS.
-                        // Let's re-enable button after a short timeout.
                         setTimeout(() => { this.loading = false; }, 2000);
                     }
                 }

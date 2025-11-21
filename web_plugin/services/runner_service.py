@@ -12,7 +12,9 @@ class RunnerService:
                          title: str,
                          author: str = "",
                          year: str = "",
-                         index_content: str = "") -> AsyncGenerator[str, None]:
+                         index_content: str = "",
+                         no_ai: bool = False,
+                         translate_to: str = "") -> AsyncGenerator[str, None]:
         """
         Runs main.py for a single book.
         Yields output lines for WebSocket streaming.
@@ -28,39 +30,16 @@ class RunnerService:
         if year:
             cmd.extend(["--ano", str(year)])
 
-        # If index_content is provided, we might need to pass it.
-        # However, main.py currently reads from the CSV or PDF.
-        # The "Single Book" requirement says:
-        # "la estructura se asentara en la columna L de INDICE en el scv ... correspondiente al libro que se esta ejecutando."
-        # And we are bypassing the CSV read delay by passing arguments directly?
-        # main.py DOES NOT seem to accept a raw index string as an argument currently.
-        # It likely relies on internal logic to parse the PDF or read from a file.
+        # Advanced Options
+        if no_ai:
+            cmd.extend(["--sin-ia"])
 
-        # Let's check main.py arguments to see if we can pass the index structure file or string.
-        # If not, we might have to rely on the CSV update we just did in `sheet_service`
-        # OR write the index to a temporary file and pass it if main.py supports it.
-        # Given the user's "Simplified" request, and the fact we updated the Sheet in the previous step,
-        # we can hope main.py reads the sheet? No, we said we want to bypass delay.
-
-        # CRITICAL: If main.py logic for "Structure from CSV" is tightly coupled to reading the CSV file itself,
-        # we have a problem with the "Bypass" plan unless main.py accepts an argument for it.
-        # Let's assume for now main.py will be triggered.
-        # If main.py reads the CSV by URL, it will fetch the OLD data.
-        # IF main.py reads a local CSV, we could patch it.
-
-        # Wait, the user prompt says: "la estructura se asentara en la columna L ... correspondiente al libro"
-        # And "si se selecciona checkbox se suspende el uso de las opciones de indicar la estructura".
-
-        # If we assume `main.py` has been or will be modified to accept an Index argument, we pass it.
-        # If not, we might need to instruct the user or modify `main.py`.
-        # Since I cannot modify `main.py` extensively without risk,
-        # AND the user said "están definiendo partes vitales",
-        # I will stick to running the command.
-        # Ideally, I would pass `--indice_content "..."` if supported.
-        # For now, I will just run the command.
+        if translate_to and translate_to.strip():
+            cmd.extend(["--traducir-a", translate_to.strip()])
 
         yield f"🚀 Iniciando proceso para: {title}\n"
         yield f"📂 Archivo: {filepath}\n"
+        yield f"⚙️  Opciones: IA={'OFF' if no_ai else 'ON'}, Traducción={translate_to or 'OFF'}\n"
 
         try:
             process = await asyncio.create_subprocess_exec(
@@ -92,11 +71,12 @@ class RunnerService:
         except Exception as e:
             yield f"❌ Error crítico ejecutando el script: {e}\n"
 
-    async def run_batch(self, books: List[dict]) -> AsyncGenerator[str, None]:
+    async def run_batch(self, books: List[dict], no_ai: bool = False, translate_to: str = "") -> AsyncGenerator[str, None]:
         """
         Runs main.py for a list of books sequentially.
         """
         yield f"📚 Iniciando proceso BATCH para {len(books)} libros.\n"
+        yield f"⚙️  Configuración Global: IA={'OFF' if no_ai else 'ON'}, Traducción={translate_to or 'OFF'}\n"
 
         for i, book in enumerate(books):
             yield f"\n[{i+1}/{len(books)}] Procesando: {book.get('title', 'Sin Título')}\n"
@@ -106,7 +86,9 @@ class RunnerService:
                 filepath=book.get('local_path', ''),
                 title=book.get('title', ''),
                 author=book.get('author', ''),
-                year=book.get('year', '')
+                year=book.get('year', ''),
+                no_ai=no_ai,
+                translate_to=translate_to
             ):
                 yield line
 

@@ -12,8 +12,7 @@ router = APIRouter()
 sheet_manager = SheetManager()
 runner_service = RunnerService()
 
-# Shared state for logs (simple in-memory buffer for active connection)
-# In a real app, use a proper message queue (Redis/RabbitMQ)
+# Shared state for logs
 class LogManager:
     def __init__(self):
         self.active_connections: List[WebSocket] = []
@@ -30,7 +29,7 @@ class LogManager:
             try:
                 await connection.send_text(message)
             except Exception:
-                pass # Connection likely closed
+                pass
 
 log_manager = LogManager()
 
@@ -38,9 +37,12 @@ log_manager = LogManager()
 class SingleProcessRequest(BaseModel):
     row_index: int
     structure_content: Optional[str] = ""
+    no_ai: Optional[bool] = False
+    translate_to: Optional[str] = ""
 
 class BatchProcessRequest(BaseModel):
-    pass # No specific params needed, uses "SI" from sheet
+    no_ai: Optional[bool] = False
+    translate_to: Optional[str] = ""
 
 # --- Routes ---
 
@@ -55,7 +57,6 @@ async def process_single(req: SingleProcessRequest, background_tasks: Background
     1. Updates Sheet (Exclusive SI + Structure).
     2. Starts background task to run script.
     """
-    # Fetch book details first to get path/title
     books = sheet_manager.get_all_books()
     book = next((b for b in books if b["row_index"] == req.row_index), None)
 
@@ -63,10 +64,8 @@ async def process_single(req: SingleProcessRequest, background_tasks: Background
         return JSONResponse(content={"error": "Libro no encontrado"}, status_code=404)
 
     # Update Sheet
-    # Mark this book as SI, others as NO/Empty
     sheet_manager.update_book_status(req.row_index, "SI", clear_others=True)
 
-    # Update Structure
     if req.structure_content:
         sheet_manager.update_book_structure(req.row_index, req.structure_content)
 
@@ -77,7 +76,9 @@ async def process_single(req: SingleProcessRequest, background_tasks: Background
         book["title"],
         book["author"],
         book["year"],
-        req.structure_content
+        req.structure_content,
+        req.no_ai,
+        req.translate_to
     )
 
     return {"status": "started", "message": f"Procesando '{book['title']}'"}
@@ -89,22 +90,21 @@ async def process_batch(req: BatchProcessRequest, background_tasks: BackgroundTa
     2. Starts background task for batch.
     """
     books = sheet_manager.get_all_books()
-    # Filter for Status = SI (case insensitive)
     target_books = [b for b in books if str(b.get("status", "")).strip().upper() == "SI"]
 
     if not target_books:
          return JSONResponse(content={"error": "No hay libros marcados con 'SI'"}, status_code=400)
 
     # Trigger Execution
-    background_tasks.add_task(_run_and_stream_batch, target_books)
+    background_tasks.add_task(_run_and_stream_batch, target_books, req.no_ai, req.translate_to)
 
     return {"status": "started", "message": f"Iniciando lote de {len(target_books)} libros"}
 
 # --- Internal Task Wrappers ---
-async def _run_and_stream_single(filepath, title, author, year, structure):
-    async for line in runner_service.run_single(filepath, title, author, year, structure):
+async def _run_and_stream_single(filepath, title, author, year, structure, no_ai, translate_to):
+    async for line in runner_service.run_single(filepath, title, author, year, structure, no_ai, translate_to):
         await log_manager.broadcast(line)
 
-async def _run_and_stream_batch(books):
-    async for line in runner_service.run_batch(books):
+async def _run_and_stream_batch(books, no_ai, translate_to):
+    async for line in runner_service.run_batch(books, no_ai, translate_to):
         await log_manager.broadcast(line)
