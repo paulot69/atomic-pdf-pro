@@ -6,6 +6,7 @@ import sys
 import socket
 import os
 from dotenv import load_dotenv
+import logging
 
 # Load env vars
 load_dotenv()
@@ -37,7 +38,8 @@ def wait_for_server(port, timeout=10):
 def start_server(port):
     """Starts the Uvicorn server."""
     # Force 127.0.0.1 for local usage only
-    uvicorn.run("web_plugin.main:app", host=HOST, port=port, log_level="warning")
+    # Import here to avoid circular dependencies or early init issues
+    uvicorn.run("pdf_atomic_pro.api.server:app", host=HOST, port=port, log_level="warning")
 
 def main():
     print("="*50)
