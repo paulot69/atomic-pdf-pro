@@ -3,6 +3,66 @@
 Objetivo:
 Convertir lo que hoy es un proyecto poderoso pero “artesanal” en **una aplicación local profesional, estable, robusta, con interfaz completa y ejecutable**, sin depender de servidores externos ni infraestructura pagada.
 
+# 🚀 Guía de Instalación y Uso
+
+**Estado Actual:** 🚧 **FASE 3 (Interfaz Web & Consolidación)** - *Completado: Core Modular, API FastAPI, UI Web Local.*
+
+### 📋 Requisitos Previos
+Para que todo funcione correctamente, necesitas tener instalado en tu sistema:
+
+1. **Python 3.10+** (Asegúrate de agregarlo al PATH durante la instalación).
+2. **Tesseract OCR** (Motor de reconocimiento de texto para PDFs escaneados).
+   * **Windows:** [Descargar Installer](https://github.com/UB-Mannheim/tesseract/wiki). Instala y asegúrate de recordar la ruta (ej. `C:\Program Files\Tesseract-OCR`).
+   * **Linux:** `sudo apt-get install tesseract-ocr`
+3. **Poppler** (Herramientas para procesar imágenes de PDF).
+   * **Windows:** [Descargar Binarios](https://github.com/oschwartz10612/poppler-windows/releases/). Descomprime y agrega la carpeta `bin` a tu variable de entorno PATH.
+   * **Linux:** `sudo apt-get install poppler-utils`
+
+### ⚙️ Instalación Paso a Paso
+
+1. **Clonar el repositorio:**
+   ```bash
+   git clone <URL_DEL_REPO>
+   cd atomic-pdf-pro
+   ```
+
+2. **Crear un entorno virtual (Recomendado):**
+   Aísla las dependencias para evitar conflictos.
+   ```bash
+   # Windows
+   python -m venv venv
+   venv\Scripts\activate
+
+   # Mac/Linux
+   python3 -m venv venv
+   source venv/bin/activate
+   ```
+
+3. **Instalar dependencias:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. **Configuración de Secretos:**
+   * Crea un archivo llamado `.env` en la raíz del proyecto.
+   * Define tus variables (API Key de Gemini, Spreadsheet ID, etc.).
+   * Asegúrate de tener el archivo de credenciales de Google Service Account en `llaves/torre_credentials.json`.
+
+### ▶️ Ejecutar en Modo Web
+El sistema ha evolucionado a una arquitectura web local. Ya no necesitas usar la línea de comandos para procesar archivos.
+
+1. **Iniciar la Aplicación:**
+   Ejecuta el siguiente comando en tu terminal:
+   ```bash
+   python start_gui.py
+   ```
+
+2. **Usar la Interfaz:**
+   * El navegador se abrirá automáticamente en: `http://127.0.0.1:8080`
+   * **Modo Single:** Selecciona un libro individual de la lista y procésalo.
+   * **Modo Batch:** Haz clic para procesar todos los libros marcados con "SI" en tu Google Sheet.
+   * **Logs:** Observa el progreso en tiempo real en la terminal integrada en la web.
+
 ---
 
 # ⭐ **FASE 0 — Consolidación Conceptual**
@@ -27,7 +87,7 @@ Convertir lo que hoy es un proyecto poderoso pero “artesanal” en **una aplic
 
 ---
 
-# ⭐ **FASE 1 — Reorganizar el proyecto en arquitectura profesional**
+# ⭐ **FASE 1 — Reorganizar el proyecto en arquitectura profesional (✅ COMPLETADO)**
 
 Tu código ya es bueno. Pero ahora debe ser *ordenado como producto*.
 
@@ -77,7 +137,7 @@ pdf_atomic_pro/
 
 ---
 
-# ⭐ **FASE 2 — Transformar el pipeline en una API real (FastAPI)**
+# ⭐ **FASE 2 — Transformar el pipeline en una API real (FastAPI) (✅ COMPLETADO)**
 
 ### Endpoints esenciales
 
@@ -105,7 +165,7 @@ pdf_atomic_pro/
 
 ---
 
-# ⭐ **FASE 3 — Interfaz Web limpia y compacta**
+# ⭐ **FASE 3 — Interfaz Web limpia y compacta (✅ COMPLETADO)**
 
 Tu demo HTML ya es un gran comienzo, pero debe convertirse en una UI “productiva”:
 
@@ -147,7 +207,7 @@ Tu demo HTML ya es un gran comienzo, pero debe convertirse en una UI “producti
 
 ---
 
-# ⭐ **FASE 4 — Sistema de Configuración y Plantillas**
+# ⭐ **FASE 4 — Sistema de Configuración y Plantillas (🚧 EN PROGRESO)**
 
 Profesional = configurable.
 

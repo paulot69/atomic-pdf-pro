@@ -1,6 +1,7 @@
 import os
 import sys
 import logging
+import json
 from dotenv import load_dotenv
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
@@ -11,10 +12,7 @@ from pdf_atomic_pro.core.estructura.indice_detector import TOCEntry
 logger = logging.getLogger(__name__)
 
 # --- Constantes ---
-HISTORY_FILE = "history.json" # Changed from processed_history.log to allow JSON structure if needed, but sticking to line-based for now per "simpler" decision or json?
-# The plan said "JSON local for history". I should implement JSON.
-import json
-
+HISTORY_FILE = "history.json"
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly']
 SERVICE_ACCOUNT_FILE = 'llaves/torre_credentials.json'
 RANGE_NAME = 'Hoja 1'
