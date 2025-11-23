@@ -2,12 +2,12 @@ import os
 import sys
 import logging
 import json
-from dotenv import load_dotenv
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from pdf_atomic_pro.core.pipeline import process_pdf
 from pdf_atomic_pro.core.estructura.indice_detector import TOCEntry
-from pdf_atomic_pro.core.utils import find_pdf_recursive
+from pdf_atomic_pro.utils.config_loader import load_config
+from pdf_atomic_pro.utils.paths import resolve_input_path, resolve_output_path
 
 # --- Configuración de Logging ---
 logger = logging.getLogger(__name__)
@@ -15,7 +15,6 @@ logger = logging.getLogger(__name__)
 # --- Constantes ---
 HISTORY_FILE = "history.json"
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly']
-SERVICE_ACCOUNT_FILE = 'llaves/torre_credentials.json'
 RANGE_NAME = 'Hoja 1'
 
 # --- Mapeo de Columnas ---
@@ -54,21 +53,20 @@ def is_processed(filepath):
     history = _load_history()
     return any(h.get('filepath') == filepath for h in history)
 
-def get_sheet_data(spreadsheet_id=None):
+def get_sheet_data():
     """Obtiene los datos de Google Sheet usando Service Account."""
     try:
-        # If ID not passed, try env var
-        if not spreadsheet_id:
-            load_dotenv()
-            spreadsheet_id = os.getenv("SPREADSHEET_ID")
+        config = load_config()
+        spreadsheet_id = config.get('spreadsheet_id')
+        service_account_file = config.get('service_account_file')
 
         if not spreadsheet_id:
-             raise ValueError("SPREADSHEET_ID no definido.")
+             raise ValueError("SPREADSHEET_ID no definido en configuración.")
 
-        if not os.path.exists(SERVICE_ACCOUNT_FILE):
-             raise FileNotFoundError(f"No se encontró el archivo de credenciales: {SERVICE_ACCOUNT_FILE}")
+        if not service_account_file or not os.path.exists(service_account_file):
+             raise FileNotFoundError(f"No se encontró el archivo de credenciales: {service_account_file}")
 
-        creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+        creds = Credentials.from_service_account_file(service_account_file, scopes=SCOPES)
         service = build('sheets', 'v4', credentials=creds)
 
         sheet = service.spreadsheets()
@@ -132,16 +130,11 @@ def process_batch(no_ai=False, translate_to=None, update_progress_func=None):
 
             raw_name = book.get(COL_PATH, '').strip()
 
-            # Determinamos base_path según entorno
-            if os.getenv("DOCKERIZED") == "true":
-                base_path = os.getenv("DOCKER_INPUT_PATH_PREFIX", "/input")
-            else:
-                base_path = os.getenv("LOCAL_INPUT_PATH", ".")
-
-            pdf_path = find_pdf_recursive(raw_name, base_path)
+            # Resolve path using unified logic
+            pdf_path, base_path = resolve_input_path(raw_name)
 
             if pdf_path is None:
-                raise FileNotFoundError(f"PDF no encontrado en la carpeta /input o en la ruta configurada: {raw_name}")
+                raise FileNotFoundError(f"PDF no encontrado: {raw_name}. Buscado en: {base_path}")
 
             title = book.get(COL_TITLE, '')
             if is_processed(pdf_path):
@@ -157,7 +150,7 @@ def process_batch(no_ai=False, translate_to=None, update_progress_func=None):
                 title=title,
                 author=book.get(COL_AUTHOR, ''),
                 year=book.get(COL_YEAR, ''),
-                output_dir=os.getenv("DOCKER_OUTPUT_PATH", "./Libros Atomicos"),
+                output_dir=resolve_output_path(),
                 toc_from_csv=toc_from_csv,
                 thematic_folder=book.get(COL_THEMATIC, ''),
                 theme_nomenclature=book.get(COL_THEME_NOMENCLATURE, ''),
