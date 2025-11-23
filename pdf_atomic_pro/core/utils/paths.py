@@ -1,6 +1,6 @@
 import os
 import logging
-from pdf_atomic_pro.utils.config_loader import load_config
+from pdf_atomic_pro.core.utils.config_loader import load_config
 
 logger = logging.getLogger(__name__)
 

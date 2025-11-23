@@ -6,8 +6,8 @@ from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from pdf_atomic_pro.core.pipeline import process_pdf
 from pdf_atomic_pro.core.estructura.indice_detector import TOCEntry
-from pdf_atomic_pro.utils.config_loader import load_config
-from pdf_atomic_pro.utils.paths import resolve_input_path, resolve_output_path
+from pdf_atomic_pro.core.utils.config_loader import load_config
+from pdf_atomic_pro.core.utils.paths import resolve_input_path, resolve_output_path
 
 # --- Configuración de Logging ---
 logger = logging.getLogger(__name__)

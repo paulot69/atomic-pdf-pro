@@ -47,9 +47,9 @@ Una vez ejecutado, **abre tu navegador web y ve a: `http://127.0.0.1:8080`**
     ```
 2.  Configura tu entorno copiando el ejemplo:
     ```bash
-    cp .env.example .env
+    cp llaves/.env.example llaves/.env
     ```
-    *(Edita `.env` o `llaves/.env` y ajusta `LOCAL_INPUT_PATH` a la ruta raíz de tus PDFs)*
+    *(Edita `llaves/.env` y ajusta `LOCAL_INPUT_PATH` a la ruta raíz de tus PDFs)*
 3.  Ejecuta la aplicación:
     ```bash
     python start_gui.py
@@ -60,7 +60,7 @@ Una vez ejecutado, **abre tu navegador web y ve a: `http://127.0.0.1:8080`**
 # ⚙️ Configuración
 
 La configuración se maneja a través de variables de entorno y el archivo `config/settings.json`. El sistema carga la configuración en el siguiente orden de prioridad:
-1.  Variables de entorno (incluyendo `.env`).
+1.  Variables de entorno (incluyendo `llaves/.env`).
 2.  `config/settings.json`.
 
 ### Variables Clave (.env)
@@ -88,6 +88,10 @@ atomic-pdf-pro/
 │   │   ├── integridad/             ← Verificación de enlaces
 │   │   ├── limpieza/               ← Normalización de texto
 │   │   ├── traduccion/             ← Módulo de traducción
+│   │   ├── utils/                  ← Utilidades del Core
+│   │   │   ├── paths.py            ← Búsqueda recursiva
+│   │   │   ├── config_loader.py    ← Carga unificada de configuración
+│   │   │   └── logging_utils.py    ← Setup de logs
 │   │   └── pipeline.py             ← Orquestador principal
 │   │
 │   ├── api/                        ← API FastAPI
@@ -97,10 +101,6 @@ atomic-pdf-pro/
 │   ├── ui/                         ← Frontend estático
 │   │   └── dist/
 │   │
-│   ├── utils/                      ← Utilidades transversales
-│   │   ├── paths.py                ← Búsqueda recursiva y resolución de rutas
-│   │   └── config_loader.py        ← Carga unificada de configuración
-│   │
 │   └── __init__.py
 │
 ├── config/                         ← Configuración de usuario
@@ -108,9 +108,12 @@ atomic-pdf-pro/
 │   ├── taxonomy_rules.txt
 │   └── templates/                  ← Plantillas YAML
 │
+├── logs/                           ← Logs de la aplicación
+│   └── app.log
+│
 ├── llaves/                         ← Credenciales y secretos (Gitignored)
 │   ├── .env
-│   └── torre_credentials.json
+│   └── .env.example
 │
 ├── Dockerfile                      ← Definición de imagen Docker
 ├── requirements.txt

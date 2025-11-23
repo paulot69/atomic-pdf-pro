@@ -11,8 +11,12 @@ from pathlib import Path
 
 from pdf_atomic_pro.api.models import ProcessRequest, BatchProcessRequest, BookListResponse, Book
 from pdf_atomic_pro.core import batch, pipeline
-from pdf_atomic_pro.utils.config_loader import load_config
-from pdf_atomic_pro.utils.paths import resolve_input_path, resolve_output_path
+from pdf_atomic_pro.core.utils.config_loader import load_config
+from pdf_atomic_pro.core.utils.paths import resolve_input_path, resolve_output_path
+from pdf_atomic_pro.core.utils.logging_utils import setup_logging
+
+# Setup Logging (File + Console)
+setup_logging(log_level=load_config().get('log_level', 'INFO'))
 
 # Setup API
 app = FastAPI(title="PDF Atomic Pro API")
