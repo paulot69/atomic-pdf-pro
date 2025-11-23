@@ -5,63 +5,55 @@ Convertir lo que hoy es un proyecto poderoso pero “artesanal” en **una aplic
 
 # 🚀 Guía de Instalación y Uso
 
-**Estado Actual:** 🚧 **FASE 3 (Interfaz Web & Consolidación)** - *Completado: Core Modular, API FastAPI, UI Web Local.*
-
 ### 📋 Requisitos Previos
-Para que todo funcione correctamente, necesitas tener instalado en tu sistema:
 
-1. **Python 3.10+** (Asegúrate de agregarlo al PATH durante la instalación).
-2. **Tesseract OCR** (Motor de reconocimiento de texto para PDFs escaneados).
-   * **Windows:** [Descargar Installer](https://github.com/UB-Mannheim/tesseract/wiki). Instala y asegúrate de recordar la ruta (ej. `C:\Program Files\Tesseract-OCR`).
-   * **Linux:** `sudo apt-get install tesseract-ocr`
-3. **Poppler** (Herramientas para procesar imágenes de PDF).
-   * **Windows:** [Descargar Binarios](https://github.com/oschwartz10612/poppler-windows/releases/). Descomprime y agrega la carpeta `bin` a tu variable de entorno PATH.
-   * **Linux:** `sudo apt-get install poppler-utils`
+1.  **Docker Desktop** (para Windows/macOS) o **Docker Engine** (para Linux).
 
-### ⚙️ Instalación Paso a Paso
+### 🐳 Ejecución con Docker (Modo Profesional)
 
-1. **Clonar el repositorio:**
-   ```bash
-   git clone <URL_DEL_REPO>
-   cd atomic-pdf-pro
-   ```
+PDF Atomic Pro puede ejecutarse completamente dentro de un contenedor Docker, incluyendo OCR, FastAPI y la interfaz web local. No necesitas instalar Python, Tesseract o Poppler en tu sistema.
 
-2. **Crear un entorno virtual (Recomendado):**
-   Aísla las dependencias para evitar conflictos.
-   ```bash
-   # Windows
-   python -m venv venv
-   venv\Scripts\activate
+**Paso 1 — Construir la imagen de Docker**
 
-   # Mac/Linux
-   python3 -m venv venv
-   source venv/bin/activate
-   ```
+Desde la raíz del proyecto (`D:\02_DEV_LAB\00_GITHUB_REPOS\atomic-pdf-pro`), abre tu terminal y ejecuta:
 
-3. **Instalar dependencias:**
-   ```bash
-   pip install -r requirements.txt
-   ```
+```bash
+docker build -t pdf-atomic-pro .
+```
+*Este comando crea una imagen local llamada `pdf-atomic-pro` que contiene todo lo necesario para ejecutar la aplicación.*
 
-4. **Configuración de Secretos:**
-   * Crea un archivo llamado `.env` en la raíz del proyecto.
-   * Define tus variables (API Key de Gemini, Spreadsheet ID, etc.).
-   * Asegúrate de tener el archivo de credenciales de Google Service Account en `llaves/torre_credentials.json`.
+**Paso 2 — Preparar carpetas locales para datos**
 
-### ▶️ Ejecutar en Modo Web
-El sistema ha evolucionado a una arquitectura web local. Ya no necesitas usar la línea de comandos para procesar archivos.
+Crea las siguientes carpetas en tu sistema anfitrión. Estas serán utilizadas por el contenedor para leer tus PDFs y guardar los resultados. Te recomiendo esta estructura:
 
-1. **Iniciar la Aplicación:**
-   Ejecuta el siguiente comando en tu terminal:
-   ```bash
-   python start_gui.py
-   ```
+```
+D:\DOCKER_DATA\
+   pdf_atomic_pro\input\  (Coloca aquí tus PDFs para procesar)
+   pdf_atomic_pro\output\ (Aquí se guardarán los Libros Atómicos generados)
+   pdf_atomic_pro\config\ (Opcional, si deseas sobreescribir configuraciones, ej. settings.json)
+```
 
-2. **Usar la Interfaz:**
-   * El navegador se abrirá automáticamente en: `http://127.0.0.1:8080`
-   * **Modo Single:** Selecciona un libro individual de la lista y procésalo.
-   * **Modo Batch:** Haz clic para procesar todos los libros marcados con "SI" en tu Google Sheet.
-   * **Logs:** Observa el progreso en tiempo real en la terminal integrada en la web.
+**Paso 3 — Iniciar la Aplicación Web**
+
+Ejecuta el siguiente comando en tu terminal. Este comando mapea los puertos y volúmenes:
+
+```bash
+docker run --rm -p 8080:8080 \
+  -v "G:\Mi unidad\06_BIBLIOTECA_DIGITAL:/input" \
+  -v "D:\LibrosAtomicosOutput:/output" \
+  pdf-atomic-pro
+```
+
+Una vez ejecutado, **abre tu navegador web y ve a: `http://127.0.0.1:8080`**
+
+*La interfaz funciona exactamente igual que en modo local, pero ahora es completamente portátil.*
+
+**Notas Importantes:**
+
+*   `/input` y `/output` son las rutas **dentro del contenedor** que se corresponden con tus carpetas locales mapeadas.
+*   Puedes copiar archivos desde la UI o seleccionar libros desde `/input`.
+*   Los resultados se guardarán siempre en `/output`.
+*   Para detener la aplicación, presiona `Ctrl+C` en la terminal donde ejecutaste `docker run` o usa `docker stop pdf_atomic_app` en otra terminal.
 
 ---
 

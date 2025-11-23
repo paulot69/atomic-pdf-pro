@@ -12,7 +12,10 @@ import logging
 load_dotenv()
 
 DEFAULT_PORT = 8080
-HOST = "127.0.0.1"
+HOST = "127.0.0.1" # Valor predeterminado para uso local
+# Si la variable de entorno DOCKERIZED está presente y es "true", enlazar a 0.0.0.0
+if os.getenv("DOCKERIZED") == "true":
+    HOST = "0.0.0.0"
 
 def is_port_in_use(port):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:

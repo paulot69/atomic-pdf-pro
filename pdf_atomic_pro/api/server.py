@@ -11,14 +11,23 @@ from pathlib import Path
 
 from pdf_atomic_pro.api.models import ProcessRequest, BatchProcessRequest, BookListResponse, Book
 from pdf_atomic_pro.core import batch, pipeline
+from pdf_atomic_pro.core.utils import find_pdf_recursive # NEW IMPORT
 
 # Setup API
 app = FastAPI(title="PDF Atomic Pro API")
 
 # Directories
-BASE_DIR = Path(__file__).resolve().parent.parent
-UI_DIR = BASE_DIR / "ui" / "dist"
-STATIC_DIR = UI_DIR / "static"
+# En Docker, el directorio de trabajo es /app. La estructura del proyecto es plana dentro de /app.
+# UI_DIR está en /app/pdf_atomic_pro/ui/dist. STATIC_DIR está en /app/pdf_atomic_pro/ui/dist/static.
+# BASE_DIR para el paquete pdf_atomic_pro es /app/pdf_atomic_pro.
+
+UI_DIR = Path(os.getenv("UI_DIR", "/app/pdf_atomic_pro/ui/dist")) # Modificación 2. Reemplazar UI_DIR
+STATIC_DIR = UI_DIR / "static" # Modificación 2. Reemplazar STATIC_DIR
+BASE_DIR = Path(__file__).resolve().parent.parent # Sigue siendo útil para referencias internas del paquete
+
+# Configuración para rutas de PDF y salida (específico de Docker, configurable vía variables de entorno)
+DOCKER_INPUT_PATH_PREFIX = os.getenv("DOCKER_INPUT_PATH_PREFIX", "/input") # Por ejemplo, "/input"
+DOCKER_OUTPUT_PATH = os.getenv("DOCKER_OUTPUT_PATH", "./Libros Atomicos") # Ruta de salida predeterminada local
 
 # Ensure static dir exists
 if not STATIC_DIR.exists():
@@ -103,7 +112,21 @@ async def process_single(req: ProcessRequest, background_tasks: BackgroundTasks)
                 logging.error("Libro no encontrado.")
                 return
 
-            pdf_path = book_data.get('url local', '').replace('"', '')
+            # Sustituir la lógica actual del pdf_path por:
+            raw_pdf_name = book_data.get('url local', '').strip()
+
+            pdf_path = None
+            if os.getenv("DOCKERIZED") == "true":
+                pdf_path = find_pdf_recursive(
+                    raw_pdf_name,
+                    os.getenv("DOCKER_INPUT_PATH_PREFIX", "/input")
+                )
+            else:
+                pdf_path = raw_pdf_name # uso local
+            
+            # Validación
+            if pdf_path is None:
+                raise FileNotFoundError(f"PDF no encontrado en la carpeta /input o en ruta local: {raw_pdf_name}")
 
             # Use provided structure if any, else from sheet
             toc_entries = []
@@ -121,7 +144,7 @@ async def process_single(req: ProcessRequest, background_tasks: BackgroundTasks)
                 title=book_data.get('título original del libro', ''),
                 author=book_data.get('autor (nombre apellido)', ''),
                 year=book_data.get('año de publicación', ''),
-                output_dir="./Libros Atomicos", # TODO: Load from config
+                output_dir=os.getenv("DOCKER_OUTPUT_PATH", "./Libros Atomicos"), # Reemplazar la definición de output_dir
                 toc_from_csv=toc_entries,
                 thematic_folder=book_data.get('carpeta temática final', ''),
                 theme_nomenclature=book_data.get('tema (para nomenclatura)', ''),

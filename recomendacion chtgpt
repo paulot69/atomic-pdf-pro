@@ -1,0 +1,453 @@
+Actúa como un ingeniero senior especializado en Python, FastAPI, Docker y arquitectura de aplicaciones locales.
+
+Voy a darte instrucciones precisas. NO debes cambiar el diseño del proyecto. NO debes introducir nuevos módulos. NO debes inventar funciones adicionales. NO debes mover carpetas. Solo debes aplicar las modificaciones EXACTAS solicitadas.
+
+Estas instrucciones están diseñadas para el proyecto “atomic-pdf-pro”, cuya estructura es:
+
+atomic-pdf-pro/
+│
+├── pdf_atomic_pro/
+│   ├── api/
+│   │     └── server.py
+│   ├── core/
+│   │     ├── batch.py
+│   │     └── pipeline.py
+│   ├── extractor/
+│   ├── estructura/
+│   ├── generacion/
+│   ├── integridad/
+│   ├── limpieza/
+│   ├── traduccion/
+│   ├── ui/dist/
+│   └── __init__.py
+│
+├── config/
+│   ├── settings.json
+│   ├── taxonomy_rules.txt
+│   └── templates/
+│
+├── llaves/
+│   └── torre_credentials.json
+│
+├── Dockerfile
+├── requirements.txt
+├── start_gui.py
+├── main.py
+└── README.md
+
+
+OBJETIVO GENERAL
+───────────────────────────
+Adaptar la aplicación para que funcione perfectamente dentro de Docker, con estos condicionantes:
+
+1. La aplicación NO debe usar rutas absolutas de Windows.
+2. Solo debe usar NOMBRES DE ARCHIVO obtenidos desde Google Sheets.
+3. Docker debe ver los PDFs reales a través de un volumen montado como /input.
+4. La app debe buscar los PDFs recursivamente dentro de /input, sin asumir carpetas fijas.
+5. El output debe escribirse en /output (montado como volumen) cuando DOCKERIZED=true.
+6. La UI debe servirse desde /app/pdf_atomic_pro/ui/dist dentro de Docker.
+7. Toda esta lógica debe activarse SOLO si DOCKERIZED=true.
+
+
+TAREA 1 — Crear utilitario de búsqueda recursiva
+──────────────────────────────────────────────────
+Crear en pdf_atomic_pro/core/ una función llamada `find_pdf_recursive(pdf_name, base_path="/input")`:
+
+- Debe usar os.walk().
+- Debe devolver la ruta completa del archivo si se encuentra.
+- Si no se encuentra, retornar None.
+- No debe imprimir nada.
+- No debe lanzar excepciones.
+
+
+TAREA 2 — Modificar server.py
+──────────────────────────────────────────────────
+Realizar los siguientes cambios:
+
+1. Importar find_pdf_recursive.
+2. Reemplazar UI_DIR por:
+
+    UI_DIR = Path(os.getenv("UI_DIR", "/app/pdf_atomic_pro/ui/dist"))
+    STATIC_DIR = UI_DIR / "static"
+
+3. Sustituir la lógica actual del pdf_path por:
+
+    raw_pdf_name = book_data.get('url local', '').strip()
+
+    if os.getenv("DOCKERIZED") == "true":
+        pdf_path = find_pdf_recursive(
+            raw_pdf_name,
+            os.getenv("DOCKER_INPUT_PATH_PREFIX", "/input")
+        )
+    else:
+        pdf_path = raw_pdf_name
+
+4. Reemplazar la definición de output_dir en el procesado de PDF:
+
+    output_dir=os.getenv("DOCKER_OUTPUT_PATH", "./Libros Atomicos")
+
+5. Asegurar que NO existan más rutas absolutas.
+
+
+TAREA 3 — Modificar batch.py
+──────────────────────────────────────────────────
+Aplicar la misma lógica:
+
+1. Importar find_pdf_recursive.
+2. Extraer raw_name = book.get(COL_PATH, '').strip()
+3. Reemplazar ruta actual por:
+
+    if os.getenv("DOCKERIZED") == "true":
+        pdf_path = find_pdf_recursive(
+            raw_name,
+            os.getenv("DOCKER_INPUT_PATH_PREFIX", "/input")
+        )
+    else:
+        pdf_path = raw_name
+
+4. Definir output_dir con:
+
+    output_dir=os.getenv("DOCKER_OUTPUT_PATH", "./Libros Atomicos")
+
+5. No usar DEFAULT_OUTPUT_DIR ni rutas absolutas.
+
+
+TAREA 4 — Dockerfile
+──────────────────────────────────────────────────
+Actualizar el Dockerfile para que sea exactamente:
+
+FROM python:3.11-slim
+
+RUN apt-get update && apt-get install -y \
+    tesseract-ocr \
+    tesseract-ocr-spa \
+    poppler-utils \
+    ghostscript \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+EXPOSE 8080
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+ENTRYPOINT ["python", "start_gui.py"]
+
+
+TAREA 5 — .env.example
+──────────────────────────────────────────────────
+Crear (o actualizar) un archivo `.env.example` con:
+
+DOCKERIZED=false
+DOCKER_INPUT_PATH_PREFIX=
+DOCKER_OUTPUT_PATH=./Libros Atomicos
+UI_DIR=pdf_atomic_pro/ui/dist
+
+
+TAREA 6 — Validación
+──────────────────────────────────────────────────
+Agregar en server.py y batch.py una verificación previa:
+
+if pdf_path is None:
+    raise FileNotFoundError(f"PDF no encontrado en la carpeta /input: {raw_name}")
+
+Esta excepción es válida.
+
+
+TAREA 7 — NO AGREGAR MÁS CAMBIOS
+──────────────────────────────────────────────────
+- No modificar pipeline.py
+- No mover carpetas
+- No cambiar el esquema del Google Sheet
+- No añadir campos nuevos en el CSV
+- No alterar la arquitectura modular
+
+
+AL FINAL
+──────────────────────────────────────────────────
+Muestra los diffs completos en formato unificado (`diff -u`), uno por archivo modificado. No muestres archivos no cambiados. No indiques texto adicional fuera de los diffs.
+
+Esperar confirmación mía antes de escribir código nuevo no solicitado.
+
+
+---
+🧱 I. Estructura recomendada del proyecto (final)
+
+En tu captura ya vi la estructura, y es correcta para la arquitectura modular.
+Solo debes garantizar la existencia de:
+
+atomic-pdf-pro/
+│
+├── pdf_atomic_pro/
+│   ├── api/
+│   ├── core/
+│   ├── extractor/
+│   ├── estructura/
+│   ├── generacion/
+│   ├── integridad/
+│   ├── limpieza/
+│   ├── traduccion/
+│   ├── ui/dist/
+│   └── pipeline.py
+│
+├── config/
+│   ├── settings.json
+│   ├── taxonomy_rules.txt
+│   └── templates/
+│
+├── llaves/
+│   └── torre_credentials.json
+│
+├── Dockerfile
+├── requirements.txt
+├── start_gui.py
+├── main.py
+└── README.md
+
+
+Esta será la estructura final y estable.
+
+🔧 II. Variables de entorno necesarias (para Docker y para Local)
+
+Crea un archivo .env.example (y un .env en tu máquina) con:
+
+# Modo Docker activado
+DOCKERIZED=true
+
+# Donde Docker montará los PDFs
+DOCKER_INPUT_PATH_PREFIX=/input
+
+# Carpeta donde Docker guardará los vaults
+DOCKER_OUTPUT_PATH=/output
+
+# Ubicación de la UI en Docker
+UI_DIR=/app/pdf_atomic_pro/ui/dist
+
+
+Cuando NO uses Docker:
+
+DOCKERIZED=false
+DOCKER_INPUT_PATH_PREFIX=
+DOCKER_OUTPUT_PATH=./Libros Atomicos
+UI_DIR=pdf_atomic_pro/ui/dist
+
+🐳 III. Volúmenes en Docker que DEBES montar
+
+Tu biblioteca real está en:
+
+G:\Mi unidad\06_BIBLIOTECA_DIGITAL\
+
+
+Entonces Docker se ejecuta así:
+
+docker run --rm -p 8080:8080 ^
+  -v "G:\Mi unidad\06_BIBLIOTECA_DIGITAL:/input" ^
+  -v "D:\LibrosAtomicosOutput:/output" ^
+  pdf-atomic-pro
+
+
+Docker verá:
+
+/input/00_POR_CLASIFICAR
+/input/04_LIBROS_CATOLICOS
+/input/05_LITERATURA_NOVELAS
+...
+
+
+Todas las subcarpetas incluidas.
+
+🔍 IV. Cómo tu APP debe buscar los PDFs (función obligatoria)
+
+Probablemente la pieza clave del éxito.
+Esta función debe agregarse en pdf_atomic_pro/core/utils.py o dentro de pipeline.py:
+
+import os
+
+def find_pdf_recursive(pdf_name, base_path="/input"):
+    for root, dirs, files in os.walk(base_path):
+        if pdf_name in files:
+            return os.path.join(root, pdf_name)
+    return None
+
+
+Gemini CLI debe:
+
+crear esta función
+
+integrarla en server.py y batch.py
+
+eliminar dependencias de rutas absolutas
+
+usar solo nombres de archivo del Sheet
+
+🔌 V. Modificaciones obligatorias en server.py
+
+Gemini debe modificar:
+
+1) Rutas de UI:
+UI_DIR = Path(os.getenv("UI_DIR", "/app/pdf_atomic_pro/ui/dist"))
+STATIC_DIR = UI_DIR / "static"
+
+2) Remapeo de ruta desde Sheets:
+raw_pdf_name = book_data.get('url local', '').strip()
+
+if os.getenv("DOCKERIZED") == "true":
+    pdf_path = find_pdf_recursive(raw_pdf_name, os.getenv("DOCKER_INPUT_PATH_PREFIX", "/input"))
+else:
+    pdf_path = raw_pdf_name  # uso local
+
+3) Salida del vault:
+output_dir = os.getenv("DOCKER_OUTPUT_PATH", "./Libros Atomicos")
+
+📦 VI. Modificaciones obligatorias en batch.py
+
+Exactamente igual:
+
+tomar el nombre del PDF del Sheet
+
+aplicar búsqueda recursiva
+
+usar DOCKER_OUTPUT_PATH
+
+Ejemplo:
+
+raw_name = book.get(COL_PATH, '').strip()
+
+if os.getenv("DOCKERIZED") == "true":
+    pdf_path = find_pdf_recursive(
+        raw_name,
+        os.getenv("DOCKER_INPUT_PATH_PREFIX", "/input")
+    )
+else:
+    pdf_path = raw_name
+
+🧰 VII. Dockerfile final (obligatorio)
+
+Debes usar este:
+
+FROM python:3.11-slim
+
+RUN apt-get update && apt-get install -y \
+    tesseract-ocr \
+    tesseract-ocr-spa \
+    poppler-utils \
+    ghostscript \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+EXPOSE 8080
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+ENTRYPOINT ["python", "start_gui.py"]
+
+📚 VIII. Cómo debe quedar tu Google Sheet
+
+❌ Antes:
+G:\Mi unidad\06_BIBLIOTECA_DIGITAL\05_LITERATURA_NOVELAS\El Hobbit.pdf
+
+✔ Ahora (simple y universal):
+El Hobbit.pdf
+
+No más rutas Windows.
+Solo el nombre.
+
+📝 IX. Pasos completos para Gemini CLI (lista ejecutable)
+
+Esto es lo que le debes dar a Gemini CLI:
+
+🔥 PASO 1 — Actualizar .env y .env.example
+
+Agregar las variables DOCKERIZED, INPUT y OUTPUT.
+
+🔥 PASO 2 — Crear la función find_pdf_recursive()
+
+Usar os.walk para buscar por subcarpetas.
+
+🔥 PASO 3 — Modificar server.py
+
+rutas UI con UI_DIR
+
+aplicar búsqueda recursiva
+
+configurar output_dir
+
+🔥 PASO 4 — Modificar batch.py
+
+igual que server.py
+
+remapear PDFs
+
+buscar recursivamente
+
+usar DOCKER_OUTPUT_PATH
+
+🔥 PASO 5 — Dockerfile
+
+Debe instalar OCR + Poppler, usar slim, exponer 8080.
+
+🔥 PASO 6 — README
+
+Agregar sección:
+
+docker build -t pdf-atomic-pro .
+docker run --rm -p 8080:8080 \
+   -v "G:\Mi unidad\06_BIBLIOTECA_DIGITAL:/input" \
+   -v "D:\LibrosAtomicosOutput:/output" \
+   pdf-atomic-pro
+
+🔥 PASO 7 — Adaptar pipeline
+
+Asegurar que process_pdf acepte pdf_path desde find_pdf_recursive.
+
+🔥 PASO 8 — Validación
+
+Agregar:
+
+if not pdf_path:
+    raise FileNotFoundError(f"PDF no encontrado en /input: {raw_name}")
+
+🔥 PASO 9 — Testing
+
+libro en raíz
+
+libro en subcarpeta
+
+libro en sub-subcarpeta
+
+Sheet con nombre mal escrito
+
+PDF faltante
+
+PDF repetido
+
+🎯 Conclusión
+
+Con esto:
+
+Docker verá TODA tu biblioteca
+
+Sheets solo provee nombres, nunca rutas
+
+Tu app localizará PDFs en cualquier profundidad
+
+No habrá más errores por rutas locales
+
+El programa será portable y profesional
+
+Gemini CLI podrá aplicar cambios de manera segura y ordenada
