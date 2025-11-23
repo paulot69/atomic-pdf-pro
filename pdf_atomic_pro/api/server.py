@@ -11,15 +11,19 @@ from pathlib import Path
 
 from pdf_atomic_pro.api.models import ProcessRequest, BatchProcessRequest, BookListResponse, Book
 from pdf_atomic_pro.core import batch, pipeline
-from pdf_atomic_pro.core.utils import find_pdf_recursive
+from pdf_atomic_pro.utils.config_loader import load_config
+from pdf_atomic_pro.utils.paths import resolve_input_path, resolve_output_path
 
 # Setup API
 app = FastAPI(title="PDF Atomic Pro API")
 
+# Load Config
+config = load_config()
+
 # Directories
-UI_DIR = Path(os.getenv("UI_DIR", "/app/pdf_atomic_pro/ui/dist"))
+UI_DIR = Path(config.get('ui_dir', '/app/pdf_atomic_pro/ui/dist'))
 STATIC_DIR = UI_DIR / "static"
-BASE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR = Path(__file__).resolve().parent.parent.parent # Root of project
 
 # Ensure static dir exists
 if not STATIC_DIR.exists():
@@ -65,7 +69,7 @@ class WebSocketHandler(logging.Handler):
 ws_handler = WebSocketHandler()
 ws_handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] > %(message)s', datefmt='%H:%M:%S'))
 logging.getLogger().addHandler(ws_handler)
-logging.getLogger().setLevel(logging.INFO)
+logging.getLogger().setLevel(getattr(logging, config.get('log_level', 'INFO').upper()))
 
 
 # --- Routes ---
@@ -105,18 +109,12 @@ async def process_single(req: ProcessRequest, background_tasks: BackgroundTasks)
                 return
 
             raw_pdf_name = book_data.get('url local', '').strip()
-
-            # Determinamos base_path según entorno
-            if os.getenv("DOCKERIZED") == "true":
-                base_path = os.getenv("DOCKER_INPUT_PATH_PREFIX", "/input")
-            else:
-                base_path = os.getenv("LOCAL_INPUT_PATH", ".")
-
-            # Búsqueda recursiva
-            pdf_path = find_pdf_recursive(raw_pdf_name, base_path)
             
+            # Resolve path using unified logic
+            pdf_path, base_path = resolve_input_path(raw_pdf_name)
+
             if pdf_path is None:
-                raise FileNotFoundError(f"PDF no encontrado en la carpeta /input o en la ruta configurada: {raw_pdf_name}")
+                raise FileNotFoundError(f"PDF no encontrado: {raw_pdf_name}. Buscado en: {base_path}")
 
             # Use provided structure if any, else from sheet
             toc_entries = []
@@ -134,7 +132,7 @@ async def process_single(req: ProcessRequest, background_tasks: BackgroundTasks)
                 title=book_data.get('título original del libro', ''),
                 author=book_data.get('autor (nombre apellido)', ''),
                 year=book_data.get('año de publicación', ''),
-                output_dir=os.getenv("DOCKER_OUTPUT_PATH", "./Libros Atomicos"),
+                output_dir=resolve_output_path(),
                 toc_from_csv=toc_entries,
                 thematic_folder=book_data.get('carpeta temática final', ''),
                 theme_nomenclature=book_data.get('tema (para nomenclatura)', ''),
