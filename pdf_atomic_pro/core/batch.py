@@ -7,7 +7,7 @@ from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from pdf_atomic_pro.core.pipeline import process_pdf
 from pdf_atomic_pro.core.estructura.indice_detector import TOCEntry
-from pdf_atomic_pro.core.utils import find_pdf_recursive # NEW IMPORT
+from pdf_atomic_pro.core.utils import find_pdf_recursive
 
 # --- Configuración de Logging ---
 logger = logging.getLogger(__name__)
@@ -17,7 +17,6 @@ HISTORY_FILE = "history.json"
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly']
 SERVICE_ACCOUNT_FILE = 'llaves/torre_credentials.json'
 RANGE_NAME = 'Hoja 1'
-# DEFAULT_OUTPUT_DIR = "./Libros Atomicos" # REMOVED
 
 # --- Mapeo de Columnas ---
 COL_TRIGGER = "atomizar libro"
@@ -131,28 +130,20 @@ def process_batch(no_ai=False, translate_to=None, update_progress_func=None):
             if update_progress_func:
                 update_progress_func(i, total, f"Procesando {i+1}/{total}: {book.get(COL_TITLE)}")
 
-            # ORIGINAL: pdf_path = book.get(COL_PATH, '').replace('"', '')
-            raw_name = book.get(COL_PATH, '').strip() # MODIFIED
+            raw_name = book.get(COL_PATH, '').strip()
 
-            pdf_path = None # NEW
-            if os.getenv("DOCKERIZED") == "true": # MODIFIED
-                pdf_path = find_pdf_recursive( # MODIFIED
-                    raw_name, # MODIFIED
-                    os.getenv("DOCKER_INPUT_PATH_PREFIX", "/input") # MODIFIED
-                ) # MODIFIED
-            else: # MODIFIED
-                pdf_path = raw_name # MODIFIED
+            # Determinamos base_path según entorno
+            if os.getenv("DOCKERIZED") == "true":
+                base_path = os.getenv("DOCKER_INPUT_PATH_PREFIX", "/input")
+            else:
+                base_path = os.getenv("LOCAL_INPUT_PATH", ".")
 
-            # VALIDATION
-            if pdf_path is None: # NEW VALIDATION
-                raise FileNotFoundError(f"PDF no encontrado en la carpeta /input o en ruta local: {raw_name}") # NEW
+            pdf_path = find_pdf_recursive(raw_name, base_path)
+
+            if pdf_path is None:
+                raise FileNotFoundError(f"PDF no encontrado en la carpeta /input o en la ruta configurada: {raw_name}")
 
             title = book.get(COL_TITLE, '')
-
-            # ORIGINAL: if not pdf_path or not os.path.exists(pdf_path): # MODIFIED: Replaced with new validation
-            # ORIGINAL:     logger.error(f"Archivo no encontrado: {pdf_path}")
-            # ORIGINAL:     continue
-
             if is_processed(pdf_path):
                  logger.info(f"Saltando {title}, ya procesado.")
                  continue
@@ -166,7 +157,7 @@ def process_batch(no_ai=False, translate_to=None, update_progress_func=None):
                 title=title,
                 author=book.get(COL_AUTHOR, ''),
                 year=book.get(COL_YEAR, ''),
-                output_dir=os.getenv("DOCKER_OUTPUT_PATH", "./Libros Atomicos"), # MODIFIED
+                output_dir=os.getenv("DOCKER_OUTPUT_PATH", "./Libros Atomicos"),
                 toc_from_csv=toc_from_csv,
                 thematic_folder=book.get(COL_THEMATIC, ''),
                 theme_nomenclature=book.get(COL_THEME_NOMENCLATURE, ''),
