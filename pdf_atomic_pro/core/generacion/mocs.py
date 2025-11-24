@@ -61,10 +61,16 @@ def write_mocs(book_root: str, book_title: str, author: str, year: str, chapters
     # 1. Use passed configuration and templates
     try:
         structure_rules = config['structure']
-        project_root = Path(__file__).resolve().parents[3]
+
+        # Use CWD (Repo Root) as base for config paths which include 'pdf_atomic_pro/config/...'
+        project_root = Path.cwd()
         
         chapter_template_path = project_root / config['templates']['chapter_moc']
         book_template_path = project_root / config['templates']['book_moc']
+
+        if not chapter_template_path.exists():
+            # Fallback if running not from root?
+             pass
 
         with open(chapter_template_path, 'r', encoding='utf-8') as f:
             chapter_moc_template = Template(f.read())

@@ -1,12 +1,11 @@
 import os
 import re
 import logging # NEW: Import logging
-from typing import List, Dict
+from typing import List, Dict, Optional
 from jinja2 import Template
 from pathlib import Path
 
 from .utils import _sanitize_title_for_filename, get_main_moc_name
-from pdf_atomic_pro.core.ai_connector import MetadataEngine
 from .summarizer import generate_fallback_summary
 
 def _get_author_lastname(author: str) -> str:
@@ -32,17 +31,42 @@ def process_and_write_atomic_notes(chapters: List[Dict], book_title: str, author
     # 1. Use passed configuration and templates
     try:
         # Resolve template path relative to the project root, using the passed config
-        project_root = Path(__file__).resolve().parents[3]
+        # Assuming run from root, templates path in config is relative to root.
+        # But if we rely on relative paths, we must be careful.
+        # The safest bet is to resolve relative to CWD (root) OR resolve relative to this file's package root if intended.
+        # Given config now says 'pdf_atomic_pro/config/templates/...', resolving from CWD (Repo Root) is correct.
+
+        project_root = Path.cwd()
         template_path = project_root / config['templates']['atomic_note']
         
+        if not template_path.exists():
+             # Fallback: try resolving relative to file location if CWD fails?
+             # Or maybe project_root was intended to be the package root?
+             # Let's try locating it relative to this file's parent's parent's parent (pdf_atomic_pro root)
+             # this file is in pdf_atomic_pro/core/generacion/
+             # parents[0] = generacion, parents[1] = core, parents[2] = pdf_atomic_pro
+             package_root = Path(__file__).resolve().parents[2]
+             # But config string includes 'pdf_atomic_pro/', so it expects repo root.
+             # If we are running from repo root, CWD is fine.
+             pass
+
         with open(template_path, 'r', encoding='utf-8') as f:
             note_template = Template(f.read())
     except (FileNotFoundError, ValueError, KeyError) as e:
-        raise RuntimeError(f"Failed to load or parse configuration/templates: {e}")
+        raise RuntimeError(f"Failed to load or parse configuration/templates at {template_path if 'template_path' in locals() else 'unknown'}: {e}")
 
     atomic_chapters_data = []
     all_atomic_notes_for_linking = []
-    metadata_engine = MetadataEngine() if use_ai else None
+
+    metadata_engine = None
+    if use_ai:
+        try:
+             # Lazy import to avoid hard dependency on AI libs if not used
+             from pdf_atomic_pro.core.ai_connector import MetadataEngine
+             metadata_engine = MetadataEngine()
+        except ImportError:
+             logging.warning("MetadataEngine could not be imported. AI features disabled.")
+             metadata_engine = None
 
     # 2. First pass: Prepare all note data without writing
     chapter_num_counter = 1

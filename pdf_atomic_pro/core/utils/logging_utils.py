@@ -2,7 +2,12 @@ import logging
 import os
 from pathlib import Path
 
-def setup_logging(log_level="INFO", log_file="logs/app.log"):
+# Update default log path to reflect new structure: pdf_atomic_pro/logs/app.log
+# We use a path relative to the package root if possible, or relative to CWD.
+# Assuming running from root, 'pdf_atomic_pro/logs/app.log' is correct.
+DEFAULT_LOG_FILE = "pdf_atomic_pro/logs/app.log"
+
+def setup_logging(log_level="INFO", log_file=DEFAULT_LOG_FILE):
     """
     Configures logging to file and console.
     """
