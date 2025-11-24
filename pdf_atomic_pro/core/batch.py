@@ -53,10 +53,6 @@ def is_processed(filepath):
     history = _load_history()
     return any(h.get('filepath') == filepath for h in history)
 
-    except Exception as e:
-        logger.error(f"Error al conectar con Google Sheets: {e}")
-        raise e
-
 def get_data_from_csv(url):
     """Fetches data from a public CSV URL."""
     import pandas as pd
@@ -101,10 +97,15 @@ def get_sheet_data():
         service_account_file = config.get('service_account_file')
 
         if not spreadsheet_id:
-             raise ValueError("SPREADSHEET_ID no definido en configuración.")
+             # Just return empty if not configured, or raise?
+             # Let's log warn and return empty to avoid crashing if user hasn't set it up yet.
+             logger.warning("SPREADSHEET_ID no definido en configuración.")
+             return []
 
         if not service_account_file or not os.path.exists(service_account_file):
-             raise FileNotFoundError(f"No se encontró el archivo de credenciales: {service_account_file}")
+             logger.warning(f"No se encontró el archivo de credenciales: {service_account_file}")
+             # Return empty instead of raising to allow 'offline' or 'test' modes without crashing immediately
+             return []
 
         creds = Credentials.from_service_account_file(service_account_file, scopes=SCOPES)
         service = build('sheets', 'v4', credentials=creds)
@@ -152,6 +153,10 @@ def process_batch(no_ai=False, translate_to=None, update_progress_func=None):
     """
     try:
         all_books = get_sheet_data()
+        if not all_books:
+             logger.warning("No data retrieved from sheet/csv. Skipping batch.")
+             return 0
+
         to_process = [
             book for book in all_books
             if book.get(COL_TRIGGER, '').strip().upper() == TRIGGER_VALUE
@@ -174,7 +179,8 @@ def process_batch(no_ai=False, translate_to=None, update_progress_func=None):
             pdf_path, base_path = resolve_input_path(raw_name)
 
             if pdf_path is None:
-                raise FileNotFoundError(f"PDF no encontrado: {raw_name}. Buscado en: {base_path}")
+                logger.error(f"PDF no encontrado: {raw_name}. Buscado en: {base_path}")
+                continue # Skip this book instead of crashing entire batch
 
             title = book.get(COL_TITLE, '')
             if is_processed(pdf_path):

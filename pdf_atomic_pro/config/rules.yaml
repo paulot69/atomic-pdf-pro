@@ -37,6 +37,6 @@ subtitle_detection:
         ^\s*(\d+(\.\d+)*|[a-zA-Z]\)|[ivxlcdm]+\.)\s+.*
       score: 2
 templates:
-  atomic_note: "config/templates/atomic_note_template.md"
-  chapter_moc: "config/templates/chapter_moc_template.md"
-  book_moc: "config/templates/book_moc_template.md"
+  atomic_note: "pdf_atomic_pro/config/templates/atomic_note_template.md"
+  chapter_moc: "pdf_atomic_pro/config/templates/chapter_moc_template.md"
+  book_moc: "pdf_atomic_pro/config/templates/book_moc_template.md"
