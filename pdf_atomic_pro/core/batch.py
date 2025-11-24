@@ -53,10 +53,50 @@ def is_processed(filepath):
     history = _load_history()
     return any(h.get('filepath') == filepath for h in history)
 
-def get_sheet_data():
-    """Obtiene los datos de Google Sheet usando Service Account."""
+    except Exception as e:
+        logger.error(f"Error al conectar con Google Sheets: {e}")
+        raise e
+
+def get_data_from_csv(url):
+    """Fetches data from a public CSV URL."""
+    import pandas as pd
+    import io
+    import requests
+    
     try:
-        config = load_config()
+        response = requests.get(url)
+        response.raise_for_status()
+        
+        # Read CSV
+        df = pd.read_csv(io.StringIO(response.text))
+        
+        # Normalize headers
+        df.columns = [str(h).strip().lower().replace('.', '') for h in df.columns]
+        
+        # Convert to list of dicts
+        data = []
+        for i, row in df.iterrows():
+            row_dict = row.fillna('').astype(str).to_dict()
+            row_dict['row_index'] = i + 1 # 1-based index
+            data.append(row_dict)
+            
+        return data
+    except Exception as e:
+        logger.error(f"Error fetching CSV: {e}")
+        raise e
+
+def get_sheet_data():
+    """Obtiene los datos de Google Sheet (CSV URL o API)."""
+    config = load_config()
+    
+    # 1. Try CSV URL first
+    csv_url = config.get('csv_url')
+    if csv_url:
+        logger.info(f"Using CSV URL: {csv_url}")
+        return get_data_from_csv(csv_url)
+
+    # 2. Fallback to API
+    try:
         spreadsheet_id = config.get('spreadsheet_id')
         service_account_file = config.get('service_account_file')
 
@@ -88,7 +128,7 @@ def get_sheet_data():
         return data
 
     except Exception as e:
-        logger.error(f"Error al conectar con Google Sheets: {e}")
+        logger.error(f"Error al conectar con Google Sheets API: {e}")
         raise e
 
 def parse_toc_from_string(indice_str):

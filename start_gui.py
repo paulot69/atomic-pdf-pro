@@ -9,7 +9,12 @@ from dotenv import load_dotenv
 import logging
 
 # Load env vars
-load_dotenv()
+# Load env vars
+dotenv_path = os.path.join(os.path.dirname(__file__), 'llaves', '.env')
+if os.path.exists(dotenv_path):
+    load_dotenv(dotenv_path)
+else:
+    load_dotenv()
 
 DEFAULT_PORT = 8080
 HOST = "127.0.0.1" # Valor predeterminado para uso local
