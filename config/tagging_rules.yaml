@@ -1,0 +1,315 @@
+# -----------------------------------------------------------------
+# Reglas para Etiquetado Automático y Creación de Wikilinks
+# -----------------------------------------------------------------
+
+# PARTE 1: REGLAS DE INFERENCIA DE TAGS
+# Define las condiciones para añadir un tag a una nota atómica.
+tag_inference:
+  # --- Worldbuilding Tags ---
+  "worldbuilding/cosmologia":
+    primary_keywords: [cosmología, cosmogonía]
+    primary_threshold: 2
+    secondary_keywords: [origen, leyes universales, tiempo, eternidad, planos, dimensiones, fuerzas primordiales, entidades creadoras, materia, energía, magia, estructura ontológica, equilibrio, entropía, propósito del universo]
+    secondary_threshold: 4
+  "worldbuilding/geografia":
+    primary_keywords: [geografía, entorno físico]
+    primary_threshold: 2
+    secondary_keywords: [estructura planetaria, escala, relieve, morfología, climas, biomas, recursos naturales, cataclismos, geología, entorno, cultura, interconexión causal]
+    secondary_threshold: 5
+  "worldbuilding/cronologia":
+    primary_keywords: [cronología, historia, tiempo]
+    primary_threshold: 2
+    secondary_keywords: [tipos de historia, bloques fundamentales, interconexión con el mundo]
+    secondary_threshold: 3
+  "worldbuilding/cultura":
+    primary_keywords: [cultura, civilización]
+    primary_threshold: 2
+    secondary_keywords: [origen cultural, evolución cultural, gobierno, estructura social, expresión cultural, economía, tecnología, religión, cosmovisión, valores, moral, comportamiento, relaciones entre civilizaciones]
+    secondary_threshold: 5
+  "worldbuilding/sistema-de-creencias":
+    primary_keywords: [creencias, religión]
+    primary_threshold: 2
+    secondary_keywords: [cosmogonía espiritual, panteón, entidades sagradas, dogma, doctrina, rituales, cultos, símbolos, instituciones, jerarquía religiosa, moral, ética, destino, herejías, religiones rivales]
+    secondary_threshold: 5
+  "worldbuilding/sistemas-de-magia":
+    primary_keywords: [magia, sistema de magia]
+    primary_threshold: 2
+    secondary_keywords: [naturaleza del poder, origen del poder, leyes, coherencia interna, canales, usuarios del poder, costo, corrupción, manifestaciones del poder, clasificación de sistemas]
+    secondary_threshold: 4
+  "worldbuilding/tecnologia":
+    primary_keywords: [tecnología, invención]
+    primary_threshold: 2
+    secondary_keywords: [origen, propósito, nivel de desarrollo, principios científicos, principios metafísicos, energía, recursos, inventos, instituciones, relación con el poder, progreso, decadencia, humanidad]
+    secondary_threshold: 4
+  "worldbuilding/lenguaje":
+    primary_keywords: [lenguaje, comunicación, lingüística]
+    primary_threshold: 2
+    secondary_keywords: [origen lingüístico, evolución lingüística, fonética, estética sonora, gramática, estructura, escritura, símbolos, lenguaje mágico, lenguaje sagrado, lenguas, poder político, comunicación no verbal, traducción, pérdida lingüística, corrupción lingüística]
+    secondary_threshold: 5
+  "worldbuilding/sociedad-politica":
+    primary_keywords: [sociedad, política]
+    primary_threshold: 2
+    secondary_keywords: [sistemas sociales, estructura social, jerarquía social, economía, recursos, familia, comunidad, instituciones sociales, formas de gobierno, ideologías, legitimidad del poder, leyes, justicia, control, conflicto político, dinámicas de poder]
+    secondary_threshold: 5
+  "worldbuilding/estetica-tono":
+    primary_keywords: [estética, tono]
+    primary_threshold: 2
+    secondary_keywords: [fundamentos astronómicos, fundamentos geológicos, origen y recursos, geografía, cultura, conflicto, estructuras sociales, mitos vivos, linajes simbólicos]
+    secondary_threshold: 4
+  "worldbuilding/personajes-mitos":
+    primary_keywords: [personaje, mito]
+    primary_threshold: 2
+    secondary_keywords: [arquetipo, función, motivación, conflicto interno, virtudes, defectos, transformación, contexto, pertenencia, arco de evolución, psicología, símbolo]
+    secondary_threshold: 4
+  
+  # --- Narrativa Tags ---
+  "narrativa/conceptos-fundamentales":
+    primary_keywords: [narrativa, inspiración, premisa]
+    primary_threshold: 2
+    secondary_keywords: [viaje del héroe, monomito, tema central, premisa moral]
+    secondary_threshold: 3
+  "narrativa/creacion-de-personajes":
+    primary_keywords: [personaje, personajes]
+    primary_threshold: 2
+    secondary_keywords: [arco de transformación, falla, necesidad, deseo, arquetipos]
+    secondary_threshold: 4
+  "narrativa/estructura-trama":
+    primary_keywords: [estructura, trama]
+    primary_threshold: 2
+    secondary_keywords: [estructura de la novela, incidente incitador, progresión de la trama, obstáculos]
+    secondary_threshold: 3
+  "narrativa/escenas-dialogo":
+    primary_keywords: [escena, diálogo]
+    primary_threshold: 2
+    secondary_keywords: [función de la escena, diálogo auténtico, atmósfera, detalles sensoriales]
+    secondary_threshold: 3
+  "narrativa/proceso-de-escritura":
+    primary_keywords: [escritura, escribir]
+    primary_threshold: 2
+    secondary_keywords: [hábito de escribir, primeros borradores, revisión, edición, disciplina, oficio]
+    secondary_threshold: 4
+
+# PARTE 2: REGLAS DE GENERACIÓN DE WIKILINKS
+wikilink_generation:
+  # Umbral 'Z': Número mínimo de veces que una palabra debe aparecer en TODO el libro
+  # para ser considerada un "término clave" y convertirse en un wikilink.
+  global_threshold: 10
+
+  # Lista de palabras comunes que NUNCA deben convertirse en wikilinks.
+  stop_words:
+    - el
+    - la
+    - los
+    - las
+    - un
+    - una
+    - unos
+    - unas
+    - de
+    - del
+    - a
+    - al
+    - en
+    - es
+    - son
+    - por
+    - para
+    - con
+    - sin
+    - sobre
+    - que
+    - qué
+    - y
+    - o
+    - pero
+    - mas
+    - más
+    - si
+    - no
+    - su
+    - sus
+    - como
+    - este
+    - esta
+    - esto
+    - ese
+    - esa
+    - eso
+    - aquel
+    - aquella
+    - mucho
+    - muy
+    - se
+    - lo
+    - le
+    - me
+    - te
+    - nos
+    - os
+    - mi
+    - tu
+    - su
+    - yo
+    - tú
+    - él
+    - ella
+    - nosotros
+    - vosotros
+    - ellos
+    - ellas
+    - al
+    - del
+    - era
+    - fue
+    - fui
+    - ser
+    - estar
+    - tener
+    - hacer
+    - ir
+    - ver
+    - dar
+    - hay
+    - había
+    - desde
+    - hasta
+    - también
+    - tampoco
+    - entre
+    - cuando
+    - donde
+    - quien
+    - cual
+    - cuyo
+    - que
+    - qué
+    - como
+    - cómo
+    - porque
+    - porqué
+    - por que
+    - por qué
+    - así
+    - aun
+    - aún
+    - pues
+    - entonces
+    - luego
+    - ya
+    - casi
+    - siempre
+    - nunca
+    - antes
+    - después
+    - ahora
+    - mientras
+    - durante
+    - sobre
+    - bajo
+    - ante
+    - contra
+    - hacia
+    - hasta
+    - según
+    - sin
+    - tras
+    - mediante
+    - versus
+    - vía
+    - cosa
+    - algo
+    - nada
+    - cada
+    - otro
+    - otra
+    - otros
+    - otras
+    - todo
+    - toda
+    - todos
+    - todas
+    - mismo
+    - misma
+    - mismos
+    - mismas
+    - tan
+    - tanto
+    - tanta
+    - tantos
+    - tantas
+    - tal
+    - tales
+    - así
+    - bien
+    - mal
+    - siempre
+    - nunca
+    - jamás
+    - también
+    - tampoco
+    - ya
+    - aún
+    - aun
+    - casi
+    - no
+    - si
+    - sí
+    - solo
+    - sólo
+    - etc
+    - etc.
+    - ej
+    - p. ej.
+    - ej.
+    - p.e.
+    - p. ej
+    - vs
+    - vs.
+    - etc
+    - etc.
+    - etc
+    - etc
+    - etc.
+    - etc.
+    - etc.
+    - etc
+    - etc
+    - etc
+    - etc.
+    - etc
+    - etc
+    - etc
+    - etc
+    - etc
+    - etc
+    - etc
+    - etc
+    - etc
+    - etc
+    - etc
+    - etc
+    - etc
+    - etc
+    - etc
+    - etc
+    - etc
+    - etc
+    - etc
+    - etc
+    - etc
+    - etc
+    - etc
+    - etc
+    - etc
+    - etc
+    - etc
+    - etc
+    - etc
+    - etc
+    - etc
+    - etc
+    - etc
+    - etc
+    - etc
+    - etc
+
