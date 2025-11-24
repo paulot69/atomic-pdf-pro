@@ -1,6 +1,8 @@
 # --- SEGURIDAD CRÍTICA ---
 llaves/
-config/
+# La carpeta 'config/' se incluye ahora, ya que contiene reglas de aplicación y plantillas no sensibles.
+# Asegúrate de NO añadir NINGÚN dato sensible (API keys, credenciales, etc.) directamente en 'config/'
+# ni en sus subdirectorios. Los datos sensibles deben ir en 'llaves/', '.env', o gestionarse de forma segura.
 .env
 .env.example
 torre_credentials.json
