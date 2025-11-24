@@ -6,6 +6,8 @@ PyYAML
 unidecode
 googletrans==4.0.0-rc1
 pytest
+pytest-cov
+pytest-mock
 PyPDF2
 requests
 google-generativeai
