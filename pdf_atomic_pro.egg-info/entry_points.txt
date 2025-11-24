@@ -1,0 +1,2 @@
+[console_scripts]
+pdf-atomic-pro = start_gui:main

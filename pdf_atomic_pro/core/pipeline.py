@@ -12,6 +12,8 @@ from pdf_atomic_pro.core.estructura import indice_detector, jerarquia
 from pdf_atomic_pro.core.generacion import notas_atomicas, mocs
 from pdf_atomic_pro.core.integridad import verificador_links
 from pdf_atomic_pro.core.traduccion import traductor
+from pdf_atomic_pro.core.utils.config_loader import load_config # NEW: Import config loader
+from pdf_atomic_pro.core.generacion.utils import _sanitize_title_for_filename # NEW: Import sanitize title utility
 
 # Setup logging (Note: This might be better configured centrally or via the API)
 # keeping it simple for now or relying on the caller to configure logging.
@@ -67,6 +69,14 @@ def process_pdf(
     """
     if progress_callback: progress_callback(5, "Iniciando...")
 
+    # NEW: Load configuration once at the start of the pipeline
+    try:
+        config = load_config()
+    except (FileNotFoundError, ValueError) as e:
+        logger.error(f"Failed to load configuration: {e}")
+        if progress_callback: progress_callback(-1, f"Error de configuración: {str(e)}")
+        return False
+
     # --- Temporary Directory Setup ---
     temp_dir = tempfile.mkdtemp()
     logger.info(f"Using temporary directory: {temp_dir}")
@@ -102,13 +112,10 @@ def process_pdf(
         if toc_from_csv:
             logger.info("Using explicit TOC from CSV to find chapter locations.")
             toc_entries = toc_from_csv
-            # The _find_headers_with_toc function now directly returns all necessary info,
-            # including the level. No reconstruction is needed here.
             header_locations = jerarquia._find_headers_with_toc(
                 [line for page in structured_text for line in page],
                 toc_entries
             )
-            # If matches are found, we proceed. Otherwise, the fallback logic will trigger.
             if not header_locations:
                  logger.warning("Could not match any CSV TOC entries in the document text. Will attempt fallback.")
                  toc_entries = [] # Clear toc_entries to ensure fallback is used
@@ -118,17 +125,16 @@ def process_pdf(
             toc_entries = indice_detector.detect_toc_from_bookmarks(pdf_path)
             if not toc_entries:
                 logger.info("No bookmarks found, searching for TOC in text...")
-                # Flatten structured_text for TOC detection
-                plain_text_for_toc = "\n".join([line['text'] for page in structured_text for line in page])
-                toc_entries = indice_detector.detect_toc_entries(plain_text_for_toc)
+                # The detect_toc_entries function is now more robust and expects structured text
+                toc_entries = indice_detector.detect_toc_entries(structured_text)
 
         if not toc_entries:
             logger.warning("No reliable TOC found. Structure will be inferred sequentially (fallback).")
             is_inferred = True
         
-        # The split_into_chapters function will use the found/provided toc_entries
-        # and then apply the sub-section splitting logic internally.
-        chapters = jerarquia.split_into_chapters(structured_text, toc_entries)
+        # Pass the config to jerarquia.split_into_chapters
+        print(f"DEBUG: Config in pipeline (before jerarquia): {config['structure']['chapter_folder_name']}") # DEBUG PRINT
+        chapters = jerarquia.split_into_chapters(structured_text, toc_entries, config)
 
         # --- Optional Translation ---
         if translate_to:
@@ -137,10 +143,14 @@ def process_pdf(
 
         # 3. Vault Creation in Temp Directory
         if progress_callback: progress_callback(50, "Generando Notas Atómicas...")
-        sanitized_title = notas_atomicas._sanitize_title_for_filename(title)
-        sanitized_author = notas_atomicas._sanitize_title_for_filename(author)
+        # Use config for book_root_name
+        book_folder_name_format = config['structure']['book_folder_name']
+        book_root_name = book_folder_name_format.format(
+            year=year, 
+            title=_sanitize_title_for_filename(title), 
+            author=_sanitize_title_for_filename(author)
+        )
 
-        book_root_name = f"{year} - {sanitized_title} - {sanitized_author}"
         if is_inferred:
             book_root_name = f"[FI] - {book_root_name}"
 
@@ -150,18 +160,17 @@ def process_pdf(
         logger.info(f"Generating vault in temporary directory...")
 
         # 4. Note and MOC Generation
-        # This part can be slow, might want to instrument process_and_write_atomic_notes for finer progress if possible
-        # For now, we'll jump progress after it's done.
+        # Pass the config to notas_atomicas.process_and_write_atomic_notes
         atomic_chapters = notas_atomicas.process_and_write_atomic_notes(
             chapters, title, author, year, temp_book_root_path,
-            thematic_folder=thematic_folder,
-            theme_nomenclature=theme_nomenclature,
             use_ai=use_ai,
-            generate_summaries=generate_summaries
+            generate_summaries=generate_summaries,
+            config=config # NEW: Pass config object
         )
 
         if progress_callback: progress_callback(80, "Creando Mapas de Contenido (MOCs)...")
-        mocs.write_mocs(temp_book_root_path, title, author, year, atomic_chapters)
+        # Pass the config to mocs.write_mocs
+        mocs.write_mocs(temp_book_root_path, title, author, year, atomic_chapters, config) # NEW: Pass config object
 
         # 5. Link Verification
         if progress_callback: progress_callback(90, "Verificando enlaces...")

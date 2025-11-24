@@ -1,100 +1,62 @@
 import os
 import re
-import yaml
+import logging # NEW: Import logging
 from typing import List, Dict
+from jinja2 import Template
+from pathlib import Path
+
 from .utils import _sanitize_title_for_filename, get_main_moc_name
-from .yaml_builder import generate_frontmatter
-from .summarizer import generate_fallback_summary
+from ..utils.config_loader import load_config
 from pdf_atomic_pro.core.ai_connector import MetadataEngine
+from .summarizer import generate_fallback_summary
 
-def _generate_navigation_footer(atomic_note: Dict, book_title: str) -> str:
-    """Generates the standardized navigation footer for an atomic note."""
-    author = atomic_note.get('author', 'Unknown')
-    year = atomic_note.get('year', '0000')
+def _get_author_lastname(author: str) -> str:
+    """Extracts a simplified last name from the author's full name."""
+    if not author:
+        return "unknown"
+    # Simple split, takes the last word, sanitizes, and lowercases.
+    lastname = author.split(' ')[-1]
+    return re.sub(r'[^a-z0-9]', '', lastname.lower())
 
-    # Chapter MOC Link
-    chapter_title_sanitized = _sanitize_title_for_filename(atomic_note['chapter_title'])
-    if atomic_note.get('chapter_number') is not None:
-        folder_name = f"Capítulo {atomic_note['chapter_number']:02d} - {chapter_title_sanitized}"
-    else:
-        folder_name = chapter_title_sanitized
-    
-    chapter_moc_filename = f"MOC - {chapter_title_sanitized}.md"
-    chapter_moc_link_target = f"{folder_name}/{chapter_moc_filename}".replace("\\", "/")
-    chapter_moc_display_text = f"MOC - {atomic_note['chapter_title']}"
+def _infer_domain_tag(chapter_title: str, semantic_tags: List[str]) -> str:
+    """
+    A simple heuristic to infer a domain tag.
+    It should be improved with a more sophisticated engine, maybe checking against a known tag list.
+    """
+    # For now, return a default placeholder.
+    return "domain/por-clasificar"
 
-    # Main Book MOC Link
-    main_moc_filename, _ = get_main_moc_name(book_title, author, year)
-    main_moc_display_text = f"MOC - {book_title}"
-
-    # Unindented DataviewJS script
-    dataview_script = """```dataviewjs
-const currentFilePath = dv.current().file.path;
-const currentFolderPath = currentFilePath.substring(0, currentFilePath.lastIndexOf("/"));
-const pages = dv.pages(`"${currentFolderPath}"`) 
-  .where(p => p.file.path !== currentFilePath && !p.file.name.startsWith("MOC"))
-  .sort(p => p.file.name, 'asc');
-
-const style = dv.el("style", `
-.card { background-color: var(--background-secondary); border: 1px solid var(--background-modifier-border); padding: 14px 18px; border-radius: 8px; margin: 0 auto 12px auto; width: 100%; max-width: 700px; }
-.card-title { font-weight: 600; font-size: 1.3em; margin-bottom: 6px; text-align: left; }
-.card-title a { text-decoration: none !important; color: var(--text-accent) !important; display: inline-block; text-align: left; }
-.card-summary { font-size: 0.9em; color: var(--text-muted); text-align: left; }
-`);
-
-for (const page of pages) {
-  const resumen = page.resumen || "Sin resumen disponible.";
-  const card = dv.el("div", "", {cls: "card"});
-  const title = dv.el("div", dv.fileLink(page.file.path, false, page.file.name.replace('.md','')), {cls: "card-title"});
-  const summary = dv.el("div", resumen, {cls: "card-summary"});
-  card.appendChild(title);
-  card.appendChild(summary);
-  dv.container.appendChild(card);
-}
-```"""
-
-    footer_parts = [
-        "\n\n---",
-        "#### _Ver otros conceptos en este capítulo_:",
-        dataview_script,
-        "---"
-    ]
-    
-    if atomic_note.get('total_notes_in_chapter', 1) > 1:
-        footer_parts.append(f"_Volver al [[{chapter_moc_link_target}|{chapter_moc_display_text}]]_")
+def process_and_write_atomic_notes(chapters: List[Dict], book_title: str, author: str, year: str, book_root: str, config: Dict, use_ai: bool = True, generate_summaries: bool = True) -> List[Dict]:
+    print(f"DEBUG: Config in notas_atomicas: {config['structure']['chapter_folder_name']}") # DEBUG PRINT
+    """
+    Processes chapters into atomic notes using a template-based approach and writes them to the vault.
+    """
+    # 1. Use passed configuration and templates
+    try:
+        # Resolve template path relative to the project root, using the passed config
+        project_root = Path(__file__).resolve().parents[3]
+        template_path = project_root / config['templates']['atomic_note']
         
-    footer_parts.append(f"_Volver al [[{main_moc_filename}|{main_moc_display_text}]]_")
-    
-    return "\n".join(footer_parts)
+        with open(template_path, 'r', encoding='utf-8') as f:
+            note_template = Template(f.read())
+    except (FileNotFoundError, ValueError, KeyError) as e:
+        raise RuntimeError(f"Failed to load or parse configuration/templates: {e}")
 
-def process_and_write_atomic_notes(chapters: List[Dict], book_title: str, author: str, year: str, book_root: str, thematic_folder: str = None, theme_nomenclature: str = None, use_ai: bool = True, generate_summaries: bool = True) -> List[Dict]:
-    """
-    Processes chapters into atomic notes and writes them to the vault.
-    """
     atomic_chapters_data = []
     all_atomic_notes_for_linking = []
-
-    # Initialize the AI engine only if needed
     metadata_engine = MetadataEngine() if use_ai else None
 
+    # 2. First pass: Prepare all note data without writing
     chapter_num_counter = 1
     for chapter in chapters:
         current_chapter_number = chapter_num_counter if chapter.get('kind') == 'chapter' else None
-        
         atomic_notes_in_chapter = []
         note_num_counter = 1
-        num_sections = len(chapter['sections'])
 
         for section in chapter['sections']:
-            atomic_note_title = section['title']
-            atomic_note_content = section['content']
-
             summary = ""
             semantic_tags = []
-
-            # Clean the content for the AI
-            cleaned_content = atomic_note_content.strip()
-            cleaned_content = re.sub(r'\s+', ' ', cleaned_content) # Replace multiple spaces/newlines with a single space
+            cleaned_content = re.sub(r'\s+', ' ', section['content'].strip())
 
             if use_ai and metadata_engine and cleaned_content:
                 try:
@@ -102,143 +64,119 @@ def process_and_write_atomic_notes(chapters: List[Dict], book_title: str, author
                     if generate_summaries:
                         summary = ai_metadata.get('summary', '')
                     semantic_tags = ai_metadata.get('tags', [])
-
-                    # Fallback if AI returns empty summary but we wanted one
-                    if generate_summaries and not summary:
-                        print(f"Warning: AI returned empty metadata for note '{atomic_note_title}'. Using fallback summary.")
-                        summary = generate_fallback_summary(atomic_note_content)
-
                 except Exception as e:
-                    print(f"Warning: AI failed for note '{atomic_note_title}', using fallback. Error: {e}")
-                    if generate_summaries:
-                        summary = generate_fallback_summary(atomic_note_content)
-            else:
-                 # Use fallback if AI is disabled or content is empty
-                 if generate_summaries:
-                    summary = generate_fallback_summary(atomic_note_content)
-
-
+                    print(f"Warning: AI failed for note '{section['title']}', using fallback. Error: {e}")
+            
+            if generate_summaries and not summary:
+                summary = generate_fallback_summary(section['content'])
+            
             decimal_number = f"{current_chapter_number}.{note_num_counter}" if current_chapter_number is not None else None
 
             atomic_note = {
                 "chapter_title": chapter['title'],
                 "chapter_number": current_chapter_number,
-                "note_title": atomic_note_title,
+                "note_title": section['title'],
                 "note_decimal_number": decimal_number,
-                "content": atomic_note_content,
+                "content": section['content'],
                 "author": author,
                 "year": year,
-                "total_notes_in_chapter": num_sections
+                "summary": summary,
+                "semantic_tags": semantic_tags,
+                "level": chapter.get('level', 1)
             }
-
-            atomic_note['frontmatter'] = generate_frontmatter(
-                atomic_note, book_title, author,
-                thematic_folder=thematic_folder,
-                theme_nomenclature=theme_nomenclature,
-                summary=summary,
-                semantic_tags=semantic_tags
-            )
             atomic_notes_in_chapter.append(atomic_note)
             all_atomic_notes_for_linking.append(atomic_note)
             note_num_counter += 1
-
+        
         atomic_chapters_data.append({
             "chapter_title": chapter['title'],
             "chapter_number": current_chapter_number,
-            "level": chapter.get('level', 1), # <-- Ensure the level is passed through
+            "level": chapter.get('level', 1),
             "atomic_notes": atomic_notes_in_chapter
         })
 
         if current_chapter_number is not None:
             chapter_num_counter += 1
 
-    # Create a mapping from note title to its wikilink path
+    # 3. Create a mapping from note title to its future wikilink path
     note_path_mapping = {}
+    structure_rules = config['structure']
     for chapter_data in atomic_chapters_data:
-        chapter_title = chapter_data['chapter_title']
+        chapter_title_sanitized = _sanitize_title_for_filename(chapter_data['chapter_title'])
         chapter_number = chapter_data.get('chapter_number')
-        folder_name = f"Capítulo {chapter_number:02d} - {_sanitize_title_for_filename(chapter_title)}" if chapter_number is not None else _sanitize_title_for_filename(chapter_title)
+        
+        folder_name_format = structure_rules['chapter_folder_name']
+        folder_name = folder_name_format.format(chapter_number=chapter_number, chapter_title=chapter_title_sanitized) if chapter_number is not None else chapter_title_sanitized
 
-        for atomic_note in chapter_data['atomic_notes']:
-            note_title = atomic_note['note_title']
-            note_decimal_number = atomic_note['note_decimal_number']
-
-            if note_decimal_number:
-                note_filename_base = f"{note_decimal_number} - {_sanitize_title_for_filename(note_title)}"
-            else:
-                note_filename_base = f"{_sanitize_title_for_filename(note_title)}"
-            
-            # Obsidian can handle links with or without '.md' but omitting it is cleaner
+        for note in chapter_data['atomic_notes']:
+            note_title_sanitized = _sanitize_title_for_filename(note['note_title'])
+            note_filename_format = structure_rules['atomic_note_name']
+            note_filename_base = note_filename_format.format(
+                chapter_number=chapter_number, 
+                note_number=note['note_decimal_number'].split('.')[-1] if note.get('note_decimal_number') else 'X',
+                note_title=note_title_sanitized
+            )
             full_wikilink_path = f"{folder_name}/{note_filename_base}"
-            note_path_mapping[note_title] = full_wikilink_path
-            
-            # Also map aliases
-            if 'alias' in atomic_note['frontmatter']:
-                for alias in atomic_note['frontmatter']['alias']:
-                     if alias.lower() != note_title.lower():
-                        note_path_mapping[alias] = full_wikilink_path
+            note_path_mapping[note['note_title']] = full_wikilink_path
 
-    # This stack will hold the path of the parent directory for each level.
-    # path_stack[0] is the book's root, path_stack[1] is the active Level 1 chapter path, etc.
+    # 4. Perform wikilinking, render templates, and write notes
     path_stack = [book_root]
+    main_moc_filename, _ = get_main_moc_name(book_title, author, year, config) # NEW: Pass config
 
-    # Perform wikilink replacement and write notes
     for chapter_data in atomic_chapters_data:
-        chapter_title = chapter_data['chapter_title']
+        chapter_title_sanitized = _sanitize_title_for_filename(chapter_data['chapter_title'])
         chapter_number = chapter_data.get('chapter_number')
         chapter_level = chapter_data.get('level', 1)
 
-        folder_name = f"Capítulo {chapter_number:02d} - {_sanitize_title_for_filename(chapter_title)}" if chapter_number is not None else _sanitize_title_for_filename(chapter_title)
+        folder_name_format = structure_rules['chapter_folder_name']
+        folder_name = folder_name_format.format(chapter_number=chapter_number, chapter_title=chapter_title_sanitized) if chapter_number is not None else chapter_title_sanitized
+        
+        chapter_moc_name_format = structure_rules['chapter_moc_name']
+        chapter_moc_filename = chapter_moc_name_format.format(chapter_number=chapter_number, chapter_title=chapter_title_sanitized) if chapter_number is not None else f"MOC - {chapter_title_sanitized}.md"
 
-        # --- Corrected Path Stack Logic for Nested Directories ---
-        # The parent directory is at the index corresponding to the level minus 1.
-        # e.g., a Level 1 chapter's parent is path_stack[0] (the root).
-        # a Level 2 chapter's parent is path_stack[1].
         parent_path = path_stack[chapter_level - 1]
         chapter_path = os.path.join(parent_path, folder_name)
-
+        print(f"DEBUG: Attempting to create chapter directory: {chapter_path}") # DEBUG PRINT
         os.makedirs(chapter_path, exist_ok=True)
 
-        # Update the path stack for any potential children.
         if len(path_stack) > chapter_level:
-            # We are moving to a chapter at the same or a higher level than before.
-            # Replace the path at the current level.
             path_stack[chapter_level] = chapter_path
-            # Trim any deeper, now invalid, paths from the stack.
             path_stack = path_stack[:chapter_level + 1]
         else:
-            # We are descending one level deeper.
             path_stack.append(chapter_path)
 
-        for atomic_note in chapter_data['atomic_notes']:
-            atomic_note['footer'] = _generate_navigation_footer(atomic_note, book_title)
-
-            temp_content = atomic_note['content']
+        for note in chapter_data['atomic_notes']:
+            temp_content = note['content']
             for raw_target_title, wikilink_target in note_path_mapping.items():
-                if raw_target_title.lower() == atomic_note['note_title'].lower():
+                if raw_target_title.lower() == note['note_title'].lower():
                     continue
-                # Use word boundaries to avoid replacing parts of words
-                pattern = r'(?<!\[\[)(?<!\[)' + re.escape(raw_target_title) + r'(?!\]|\]\])'
+                pattern = r'\b' + re.escape(raw_target_title) + r'\b'
                 replacement = f'[[{wikilink_target}|{raw_target_title}]]'
                 temp_content = re.sub(pattern, replacement, temp_content, flags=re.IGNORECASE)
-            atomic_note['content'] = temp_content
             
-            note_decimal_number = atomic_note['note_decimal_number']
-            if note_decimal_number:
-                note_filename = f"{note_decimal_number} - {_sanitize_title_for_filename(atomic_note['note_title'])}.md"
-            else:
-                note_filename = f"{_sanitize_title_for_filename(atomic_note['note_title'])}.md"
-            file_path = os.path.join(chapter_path, note_filename)
+            template_context = {
+                'author_lastname': _get_author_lastname(author),
+                'domain_tag_placeholder': _infer_domain_tag(chapter_data['chapter_title'], note['semantic_tags']),
+                'all_domain_tags': note['semantic_tags'],
+                'note_title': note['note_title'],
+                'note_content': temp_content,
+                'summary': note['summary'],
+                'chapter_moc_filename': f"{folder_name}/{chapter_moc_filename}",
+                'book_moc_filename': main_moc_filename
+            }
 
-            final_footer = atomic_note['footer'].replace("{{chapter_path_placeholder}}", folder_name)
+            rendered_content = note_template.render(template_context)
+            
+            note_title_sanitized = _sanitize_title_for_filename(note['note_title'])
+            note_filename_format = structure_rules['atomic_note_name']
+            note_filename_base = note_filename_format.format(
+                chapter_number=chapter_number, 
+                note_number=note['note_decimal_number'].split('.')[-1] if note.get('note_decimal_number') else 'X',
+                note_title=note_title_sanitized
+            )
+            file_path = os.path.join(chapter_path, f"{note_filename_base}.md")
 
             with open(file_path, 'w', encoding='utf-8') as f:
-                f.write("---")
-                yaml.dump(atomic_note['frontmatter'], f, allow_unicode=True, sort_keys=False)
-                f.write("---")
-                f.write("\n\n")
-                f.write(f"# {atomic_note['note_title']}\n\n")
-                f.write(atomic_note['content'])
-                f.write(final_footer)
+                f.write(rendered_content) # Corrected typo
 
     return atomic_chapters_data

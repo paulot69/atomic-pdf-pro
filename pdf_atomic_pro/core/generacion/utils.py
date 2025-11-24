@@ -21,17 +21,25 @@ def _sanitize_title_for_filename(title: str, max_length: int = 50) -> str:
             title = title[:max_length]
     return title
 
-def get_main_moc_name(book_title: str, author: str, year: int) -> tuple[str, str]:
-    """Generates the filename and display name for the main book MOC."""
+def get_main_moc_name(book_title: str, author: str, year: int, config: dict) -> tuple[str, str]:
+    """
+    Generates the filename and display name for the main book MOC, using configuration rules.
+    """
     sanitized_title = _sanitize_title_for_filename(book_title)
     sanitized_author = _sanitize_title_for_filename(author)
     
-    # Per user request: "Curso de Escritura Creativa 2022 - Brandom Sanderson.md"
-    # Note: Sanitizing parts but keeping spaces in the final filename as requested.
-    file_name = f"{book_title.strip()} {year} - {author.strip()}.md"
-    display_name = f"{book_title.strip()} {year} - {author.strip()}"
+    # Get naming rule from config
+    book_moc_name_format = config['structure']['book_moc_name']
     
-    # A safer version for pure file system usage would be:
-    # file_name = f"{sanitized_title}-{year}-{sanitized_author}.md"
+    # Format the filename using sanitized titles and year
+    # Assuming config format string might use {title}, {author}, {year}
+    file_name = book_moc_name_format.format(
+        title=sanitized_title,
+        author=sanitized_author,
+        year=year
+    )
+    
+    # Derive display name from file_name by removing .md extension
+    display_name = file_name.replace('.md', '')
 
     return file_name, display_name

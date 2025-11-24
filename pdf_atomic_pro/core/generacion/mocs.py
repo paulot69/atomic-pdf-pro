@@ -1,7 +1,10 @@
 import os
 import yaml
 from pathlib import Path
+from typing import Dict # NEW: Import Dict
 from .utils import _sanitize_title_for_filename, get_main_moc_name
+from ..utils.config_loader import load_config
+from jinja2 import Template
 
 def _write_metadata_file(book_root: str, book_title: str, author: str, year: str):
     """
@@ -52,89 +55,68 @@ def _write_metadata_file(book_root: str, book_title: str, author: str, year: str
         f.write(content)
     print(f"Generated tag metadata file: {tags_note_path}")
 
-def write_mocs(book_root: str, book_title: str, author: str, year: str, chapters: list):
+def write_mocs(book_root: str, book_title: str, author: str, year: str, chapters: list, config: Dict):
     """
-    Writes the MOC files for the book and chapters, applying conditional and naming rules.
+    Writes the MOC files for the book and chapters using a template-based approach.
     """
-    # --- DataviewJS Templates (un-indented and syntactically correct) ---
-    chapter_moc_script = """```dataviewjs
-const currentFolderPath = dv.current().file.folder;
-const pages = dv.pages(`"${currentFolderPath}"`) 
-  .where(p => !p.file.name.startsWith("MOC"))
-  .sort(p => p.file.name, 'asc');
+    # 1. Use passed configuration and templates
+    try:
+        structure_rules = config['structure']
+        project_root = Path(__file__).resolve().parents[3]
+        
+        chapter_template_path = project_root / config['templates']['chapter_moc']
+        book_template_path = project_root / config['templates']['book_moc']
 
-const style = dv.el("style", `
-.card { background-color: var(--background-secondary); border: 1px solid var(--background-modifier-border); padding: 14px 18px; border-radius: 8px; margin: 0 auto 12px auto; width: 100%; max-width: 700px; }
-.card-title { font-weight: 600; font-size: 1.3em; margin-bottom: 6px; text-align: left; }
-.card-title a { text-decoration: none !important; color: var(--text-accent) !important; display: inline-block; text-align: left; }
-.card-summary { font-size: 0.9em; color: var(--text-muted); text-align: left; }
-`);
+        with open(chapter_template_path, 'r', encoding='utf-8') as f:
+            chapter_moc_template = Template(f.read())
+        with open(book_template_path, 'r', encoding='utf-8') as f:
+            book_moc_template = Template(f.read())
+            
+    except (FileNotFoundError, ValueError, KeyError) as e:
+        raise RuntimeError(f"Failed to load or parse MOC configuration/templates: {e}")
 
-for (const page of pages) {
-  const resumen = page.resumen || "Sin resumen disponible.";
-  const card = dv.el("div", "", {cls: "card"});
-  const title = dv.el("div", dv.fileLink(page.file.path, false, page.file.name.replace('.md','') ), {cls: "card-title"});
-  const summary = dv.el("div", resumen, {cls: "card-summary"});
-  card.appendChild(title);
-  card.appendChild(summary);
-  dv.container.appendChild(card);
-}
-```"""
-
-    main_moc_chapters_script = """```dataviewjs
-const bookRoot = dv.current().file.folder;
-const chapterMOCs = dv.pages(`"${bookRoot}"`) 
-  .where(p => p.file.name.startsWith("MOC -") && p.file.folder.contains(bookRoot))
-  .sort(p => p.file.name, 'asc');
-for (const moc of chapterMOCs) {
-  dv.el("h3", dv.fileLink(moc.file.path));
-}
-```"""
-
-    main_moc_all_notes_script = """```dataviewjs
-const bookRoot = dv.current().file.folder;
-const allAtomicNotes = dv.pages(`"${bookRoot}"`) 
-  .where(p => !p.file.name.startsWith("MOC") && !p.file.folder.includes("METADATA"))
-  .sort(p => p.file.name, 'asc');
-dv.list(allAtomicNotes.map(p => dv.fileLink(p.file.path)));
-```"""
-
-    # --- Rule 1: Write Chapter MOCs (conditionally) ---
     print("Writing MOC files...")
+    main_moc_filename, _ = get_main_moc_name(book_title, author, year, config) # NEW: Pass config
+
+    # 2. Write Chapter MOCs
     for chapter_data in chapters:
-        # NOTE: The creation of chapter directories is now handled in 'notas_atomicas.py'
-        # We only write the MOC if needed.
+        # A MOC is only needed if there is more than one note in the chapter.
         if len(chapter_data.get('atomic_notes', [])) > 1:
             chapter_title = chapter_data['chapter_title']
             chapter_number = chapter_data.get('chapter_number')
+            chapter_title_sanitized = _sanitize_title_for_filename(chapter_title)
 
-            if chapter_number is not None:
-                folder_name = f"Capítulo {chapter_number:02d} - {_sanitize_title_for_filename(chapter_title)}"
-            else:
-                folder_name = _sanitize_title_for_filename(chapter_title)
+            folder_name_format = structure_rules['chapter_folder_name']
+            folder_name = folder_name_format.format(chapter_number=chapter_number, chapter_title=chapter_title_sanitized) if chapter_number is not None else chapter_title_sanitized
             
-            # The folder is now expected to exist.
             chapter_path = os.path.join(book_root, folder_name)
-
-            moc_filename = f"MOC - {_sanitize_title_for_filename(chapter_title)}.md"
+            
+            moc_name_format = structure_rules['chapter_moc_name']
+            moc_filename = moc_name_format.format(chapter_number=chapter_number, chapter_title=chapter_title_sanitized) if chapter_number is not None else f"MOC - {chapter_title_sanitized}.md"
             moc_path = os.path.join(chapter_path, moc_filename)
-            moc_content = f"# MOC - {chapter_title}\n\n{chapter_moc_script}"
+
+            template_context = {
+                "chapter_number": chapter_number,
+                "chapter_title": chapter_title,
+                "book_moc_filename": main_moc_filename
+            }
+            
+            moc_content = chapter_moc_template.render(template_context)
             
             with open(moc_path, 'w', encoding='utf-8') as f:
                 f.write(moc_content)
-            print(f"Generated conditional MOC for chapter: {chapter_title}")
+            print(f"Generated MOC for chapter: {chapter_title}")
 
-    # --- Rule 2: Write Main MOC (new naming convention) ---
-    main_moc_filename, _ = get_main_moc_name(book_title, author, year)
+    # 3. Write Main Book MOC
     main_moc_path = os.path.join(book_root, main_moc_filename)
+    book_template_context = {
+        "book_title": book_title
+    }
+    main_moc_content = book_moc_template.render(book_template_context)
     
     with open(main_moc_path, 'w', encoding='utf-8') as f:
-        f.write(f"# Mapa de Contenido – {book_title}\n\n")
-        f.write("## Capítulos\n")
-        f.write(main_moc_chapters_script + "\n\n")
-        f.write("## Todas las Notas\n")
-        f.write(main_moc_all_notes_script)
+        f.write(main_moc_content)
     print(f"Generated main MOC: {main_moc_path}")
 
-    # --- Rule 3: Write Metadata File ---
+    # --- Rule 4: Write Metadata File (unchanged) ---
     _write_metadata_file(book_root, book_title, author, year)

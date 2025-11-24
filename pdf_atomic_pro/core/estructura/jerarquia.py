@@ -3,47 +3,110 @@ from typing import List, Dict
 from .indice_detector import TOCEntry, _normalize_title
 from ..limpieza.normalizador import normalize_text
 from collections import Counter # ADDED: Import Counter for font size analysis
+from ..utils.config_loader import load_config
 
-def _find_headers_with_toc(structured_lines: List[Dict], toc_entries: List[TOCEntry]) -> List[Dict]:
+def _find_headers_with_toc(all_structured_lines: List[Dict], toc_entries: List[TOCEntry]) -> List[Dict]:
     """
-    Finds chapter headers by performing a flexible, substring match of TOC entries against the document text.
-    Returns a list of dictionaries, each containing the index, title, and crucially, the hierarchy level.
+    Finds chapter headers by performing page-aware matching of TOC entries against the document text.
+    Prioritizes matches near the TOC entry's specified page number.
+    Returns a list of dictionaries, each containing the index, title, raw_title, and level.
     """
     header_locations = []
     
-    # Pre-normalize the TOC titles for efficient searching
-    normalized_toc = [(entry, _normalize_title(entry.title)) for entry in toc_entries]
+    # Sort toc_entries by page_number to process sequentially
+    sorted_toc_entries = sorted(toc_entries, key=lambda x: x.page_number)
+    
+    matched_toc_entries_indices = set() # To ensure each TOC entry is used once
+    
+    # Iterate through sorted TOC entries
+    for toc_idx, toc_entry in enumerate(sorted_toc_entries):
+        # We search for a line corresponding to this TOC entry.
+        # Prioritize search around the page number specified in the TOC.
+        # Allow for a small page tolerance (e.g., +/- 1 page) for flexibility.
+        
+        # Calculate start and end indices in all_structured_lines for the page range
+        # Assume an average of 50 lines per page for estimation, this is very rough
+        # A more precise method would involve building an index of first_line_idx_for_page
+        
+        # For a simple first pass, let's just iterate through the structured lines
+        # and prioritize by distance to the target page.
 
-    # Use a set to avoid re-processing the same line index
-    found_indices = set()
-
-    for i, line_data in enumerate(structured_lines):
-        if i in found_indices:
-            continue
-
-        line_text = line_data['text'].strip()
-        if not line_text:
-            continue
-
-        normalized_line = _normalize_title(line_text)
-
-        # Iterate through TOC entries to find a substring match
-        for toc_entry, normalized_toc_title in normalized_toc:
-            if normalized_toc_title in normalized_line:
-                # Use the full line text from the PDF as the title, as it's more complete
-                # and capture the level from the matched TOC entry.
-                header_locations.append({
-                    "idx": i,
-                    "title": line_text,
-                    "raw_title": line_text,
-                    "level": toc_entry.level
-                })
-                found_indices.add(i)
-                # Break to ensure we only match one TOC entry per line
+        best_match_idx = -1
+        smallest_distance = float('inf')
+        
+        normalized_toc_title = _normalize_title(toc_entry.title)
+        
+        # Search window: check lines on the target page, and a few pages before/after.
+        # Find the approximate start line for the toc_entry.page_number
+        target_page_start_line_idx = -1
+        for i, line_data in enumerate(all_structured_lines):
+            if line_data['original_page_number'] == toc_entry.page_number:
+                target_page_start_line_idx = i
                 break
+        
+        search_start_idx = max(0, target_page_start_line_idx - 100) # Look back a couple of pages
+        search_end_idx = min(len(all_structured_lines), target_page_start_line_idx + 200) # Look forward a few pages
 
-    print(f"Flexible TOC matching found {len(header_locations)} header(s).")
-    return header_locations
+
+        for i in range(search_start_idx, search_end_idx):
+            line_data = all_structured_lines[i]
+            line_text = line_data['text'].strip()
+            if not line_text:
+                continue
+            
+            normalized_line = _normalize_title(line_text)
+            
+            # --- Matching Criteria ---
+            # 1. Exact match for the cleaned title
+            # 2. Line text starts with the cleaned title (to handle "Title: Subtitle" cases)
+            # 3. Substring match, but give it lower priority
+            
+            match_score = 0
+            if normalized_line == normalized_toc_title:
+                match_score = 3
+            elif normalized_line.startswith(normalized_toc_title):
+                match_score = 2
+            elif normalized_toc_title in normalized_line:
+                match_score = 1
+            
+            if match_score > 0:
+                current_distance = abs(line_data['original_page_number'] - toc_entry.page_number)
+                
+                # If we find a good match (exact or starts with) on the target page, it's strong.
+                if match_score >= 2 and current_distance == 0:
+                    best_match_idx = i
+                    break # Found a very strong match, stop searching for this TOC entry
+                
+                # Otherwise, keep track of the best match by smallest page distance
+                if current_distance < smallest_distance:
+                    smallest_distance = current_distance
+                    best_match_idx = i
+        
+        if best_match_idx != -1:
+            line_data = all_structured_lines[best_match_idx]
+            header_locations.append({
+                "idx": best_match_idx,
+                "title": line_data['text'], # The title as it appears in the document
+                "raw_title": toc_entry.raw_title, # The original TOC entry text
+                "level": toc_entry.level,
+                "original_page_number": line_data['original_page_number']
+            })
+            matched_toc_entries_indices.add(toc_idx)
+
+    # Sort the found headers by their index in the document
+    header_locations.sort(key=lambda x: x['idx'])
+
+    # Filter out duplicate entries if the same line matches multiple TOC entries
+    # (This shouldn't happen with `break` but as a safeguard)
+    unique_header_locations = []
+    seen_indices = set()
+    for header in header_locations:
+        if header['idx'] not in seen_indices:
+            unique_header_locations.append(header)
+            seen_indices.add(header['idx'])
+    
+    print(f"Page-aware TOC matching found {len(unique_header_locations)} header(s).")
+    return unique_header_locations
 
 def _find_headers_with_fallback(structured_lines: List[Dict]) -> List[dict]:
     """Fallback method to find chapters using generic patterns and font information."""
@@ -112,10 +175,16 @@ def _find_headers_with_fallback(structured_lines: List[Dict]) -> List[dict]:
     print(f"Fallback detection found {len(header_locations)} potential chapter(s).")
     return header_locations
 
-def split_into_chapters(pages_structured_text: List[List[Dict]], toc_entries: List[TOCEntry]) -> List[dict]:
+def split_into_chapters(pages_structured_text: List[List[Dict]], toc_entries: List[TOCEntry], config: Dict) -> List[dict]:
     """Splits text into chapters, using TOC-based matching first and falling back to generic patterns."""
-    # Flatten the structured text into a single list of structured lines
-    all_structured_lines = [line for page in pages_structured_text for line in page]
+    # Flatten the structured text into a single list of structured lines,
+    # augmenting each line with its original page number.
+    all_structured_lines = []
+    for page_num, page in enumerate(pages_structured_text):
+        for line in page:
+            line_with_page = line.copy()
+            line_with_page['original_page_number'] = page_num + 1 # Convert to 1-based index
+            all_structured_lines.append(line_with_page)
     
     header_locations = []
 
@@ -136,7 +205,7 @@ def split_into_chapters(pages_structured_text: List[List[Dict]], toc_entries: Li
 
     chapters = []
     chapter_number_counter = 1
-    special_section_keywords = ["introducción", "prólogo", "epílogo", "conclusión", "apéndice"]
+    special_section_keywords = ["introducción", "prólogo", "prólogo", "epílogo", "conclusión", "apéndice"]
 
     for i, header in enumerate(header_locations):
         start_idx = header['idx'] + 1
@@ -145,14 +214,15 @@ def split_into_chapters(pages_structured_text: List[List[Dict]], toc_entries: Li
         # Extract content from structured lines
         chapter_structured_content = all_structured_lines[start_idx:end_idx]
 
-        sections = split_chapter_into_sections(chapter_structured_content, header['title']) # Pass structured content
+        sections = split_chapter_into_sections(chapter_structured_content, header['title'], config) # Pass config
+
 
         kind = "special" if any(keyword in _normalize_title(header['title']) for keyword in special_section_keywords) else "chapter"
 
         # The level is now directly available in the header dictionary
         level = header.get('level', 1)
 
-        chapter_data = {"title": header['title'], "raw_title": header['raw_title'], "kind": kind, "level": level, "sections": sections}
+        chapter_data = {"title": header['title'].strip(), "raw_title": header['raw_title'], "kind": kind, "level": level, "sections": sections}
         if kind == "chapter":
             chapter_data["number"] = chapter_number_counter
             chapter_number_counter += 1
@@ -172,74 +242,89 @@ def _get_dominant_style(structured_content: List[Dict]) -> (str, float, bool):
 
     style_counter = Counter()
     for line in structured_content:
-        # Heuristic: Consider lines with more than 3 words as body text to avoid titles skewing the result.
-        if len(line['text'].split()) > 3:
+        if line['text'].strip(): # Only consider non-empty lines
             style_key = (line['font'], round(line['size']), line['is_bold'])
             style_counter[style_key] += 1
 
     if not style_counter:
-        # If no lines match the heuristic, fall back to a simpler count
-        for line in structured_content:
-            style_key = (line['font'], round(line['size']), line['is_bold'])
-            style_counter[style_key] += 1
-
-    if not style_counter: # If still empty
+        # If still empty (e.g., all lines were empty), fall back to default
         return "Arial", 12.0, False
 
     # The dominant style is the most frequent one
     dominant_style_key = style_counter.most_common(1)[0][0]
     return dominant_style_key[0], dominant_style_key[1], dominant_style_key[2]
 
-def split_chapter_into_sections(chapter_structured_content: List[Dict], chapter_title: str) -> List[dict]:
+def split_chapter_into_sections(chapter_structured_content: List[Dict], chapter_title: str, config: Dict) -> List[dict]:
     """
-    Splits a chapter's content into sections based on a conservative, style-based subtitle detection.
-    A line is considered a subtitle if its style is different from the dominant body text style
-    and it meets certain structural criteria.
+    Splits a chapter's content into sections based on a configurable, score-based subtitle detection.
+    Heuristics and thresholds are loaded from the provided configuration object.
     """
     if not chapter_structured_content:
         return []
 
-    # 1. Determine the dominant style of the body text for this chapter
+    # 1. Use configuration for subtitle detection (passed as argument)
+    try:
+        detection_rules = config['subtitle_detection']
+        heuristics = detection_rules['heuristics']
+        threshold = detection_rules['threshold']
+        numbering_pattern = re.compile(heuristics['numbering_pattern']['regex'], re.IGNORECASE)
+    except (KeyError) as e:
+        print(f"Warning: Missing or invalid subtitle detection config: {e}. Using default fallback logic.")
+        # Provide a minimal fallback if config is missing/broken
+        heuristics = {
+            'bold_vs_not_bold': {'score': 2},
+            'font_size_increase_strong': {'multiplier': 1.15, 'score': 2},
+            'font_size_increase_weak': {'multiplier': 1.05, 'score': 1},
+            'is_short': {'score': 1},
+            'ends_like_title': {'score': 1},
+            'numbering_pattern': {'score': 2, 'regex': r"^\s*(\d+(\.\d+)*|[a-zA-Z]\)|[ivxlcdm]+\.)\s+.*"}
+        }
+        threshold = 3
+        numbering_pattern = re.compile(heuristics['numbering_pattern']['regex'], re.IGNORECASE)
+
+
+    # 2. Determine the dominant style of the body text for this chapter
     dom_font, dom_size, dom_bold = _get_dominant_style(chapter_structured_content)
     print(f"Chapter '{chapter_title[:30]}...': Dominant style: {dom_font}, {dom_size}pt, Bold={dom_bold}")
 
     sections = []
     section_breaks = []
 
-    # 2. Iterate through lines to find potential subtitles
+    # 3. Iterate through lines to find potential subtitles using the configured scoring system
     for i, line_data in enumerate(chapter_structured_content):
         stripped_text = line_data['text'].strip()
         if not stripped_text:
             continue
 
-        # --- Conservative Subtitle Heuristics ---
-        is_subtitle = False
-        
-        # Style comparison
-        line_font = line_data['font']
+        score = 0
         line_size = round(line_data['size'])
         line_bold = line_data['is_bold']
-
-        style_is_different = (line_font != dom_font or line_size != dom_size or line_bold != dom_bold)
         
-        # Structural checks
-        word_count = len(stripped_text.split())
-        is_short = 1 <= word_count < 15
-        ends_like_title = not stripped_text.endswith(('.', '?', '!', ':', ','))
+        # Apply heuristics from config
+        if line_bold and not dom_bold:
+            score += heuristics['bold_vs_not_bold']['score']
+        
+        if line_size > dom_size * heuristics['font_size_increase_strong']['multiplier']:
+            score += heuristics['font_size_increase_strong']['score']
+        elif 'font_size_increase_weak' in heuristics and line_size > dom_size * heuristics['font_size_increase_weak']['multiplier']:
+            score += heuristics['font_size_increase_weak']['score']
 
-        # A line is a subtitle if its style deviates and it looks like a title
-        if style_is_different and is_short and ends_like_title:
-            # Avoid single-word, all-caps lines which might be artifacts, unless they are significantly larger
+        word_count = len(stripped_text.split())
+        if 1 <= word_count < 15: # is_short check
+            score += heuristics['is_short']['score']
+        if not stripped_text.endswith(('.', '?', '!', ':', ',')): # ends_like_title check
+            score += heuristics['ends_like_title']['score']
+            
+        if numbering_pattern.match(stripped_text):
+            score += heuristics['numbering_pattern']['score']
+
+        if score >= threshold:
             if word_count == 1 and stripped_text.isupper() and line_size <= dom_size * 1.2:
                 continue
-
-            is_subtitle = True
-        
-        if is_subtitle:
             section_breaks.append({"title": stripped_text, "idx": i})
-            print(f"  -> Found potential subtitle: '{stripped_text}' (Style: {line_font}, {line_size}pt, Bold={line_bold})")
+            print(f"  -> Found potential subtitle (Score: {score}): '{stripped_text}'")
 
-    # 3. Structure the chapter based on the found subtitles
+    # 4. Structure the chapter based on the found subtitles
     if not section_breaks:
         print("  -> No subtitles found. Treating chapter as a single note.")
         full_content_text = normalize_text(chapter_structured_content)
@@ -248,18 +333,14 @@ def split_chapter_into_sections(chapter_structured_content: List[Dict], chapter_
     print(f"  -> Splitting chapter into {len(section_breaks) + 1} sections based on subtitles.")
     
     sections = []
-    last_idx = 0
-
-    # The first section is the content before the first subtitle
+    
     first_break_idx = section_breaks[0]['idx']
     content_before_first_break = normalize_text(chapter_structured_content[0:first_break_idx])
     if content_before_first_break.strip():
         sections.append({"title": chapter_title, "content": content_before_first_break})
 
-    # Create a section for each subtitle found
     for i, break_info in enumerate(section_breaks):
         section_title = break_info['title']
-        
         start_idx = break_info['idx'] + 1
         end_idx = section_breaks[i + 1]['idx'] if i + 1 < len(section_breaks) else len(chapter_structured_content)
         
@@ -269,5 +350,4 @@ def split_chapter_into_sections(chapter_structured_content: List[Dict], chapter_
         if section_content_text.strip():
             sections.append({"title": section_title, "content": section_content_text})
 
-    # Return only sections that have actual content
     return [s for s in sections if s.get('content', '').strip()]
