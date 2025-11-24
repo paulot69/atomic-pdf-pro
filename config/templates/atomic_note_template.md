@@ -4,7 +4,7 @@ tags:
   - archivo
   - tipo/referencia
   - fuente/{{author_lastname}}
-  - {{domain_tag_placeholder}}
+  - {% for tag in all_domain_tags %}{%- if loop.first %}{% else %}, {% endif %}{{ tag }}{% endfor %}
 resumen: "{{ summary }}"
 alias: ["{{ note_title }}"]
 ---
