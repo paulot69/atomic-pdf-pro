@@ -6,7 +6,6 @@ from jinja2 import Template
 from pathlib import Path
 
 from .utils import _sanitize_title_for_filename, get_main_moc_name
-from ..utils.config_loader import load_config
 from pdf_atomic_pro.core.ai_connector import MetadataEngine
 from .summarizer import generate_fallback_summary
 
@@ -27,7 +26,6 @@ def _infer_domain_tag(chapter_title: str, semantic_tags: List[str]) -> str:
     return "domain/por-clasificar"
 
 def process_and_write_atomic_notes(chapters: List[Dict], book_title: str, author: str, year: str, book_root: str, config: Dict, use_ai: bool = True, generate_summaries: bool = True) -> List[Dict]:
-    print(f"DEBUG: Config in notas_atomicas: {config['structure']['chapter_folder_name']}") # DEBUG PRINT
     """
     Processes chapters into atomic notes using a template-based approach and writes them to the vault.
     """
@@ -136,7 +134,6 @@ def process_and_write_atomic_notes(chapters: List[Dict], book_title: str, author
 
         parent_path = path_stack[chapter_level - 1]
         chapter_path = os.path.join(parent_path, folder_name)
-        print(f"DEBUG: Attempting to create chapter directory: {chapter_path}") # DEBUG PRINT
         os.makedirs(chapter_path, exist_ok=True)
 
         if len(path_stack) > chapter_level:

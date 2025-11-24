@@ -3,7 +3,6 @@ import yaml
 from pathlib import Path
 from typing import Dict # NEW: Import Dict
 from .utils import _sanitize_title_for_filename, get_main_moc_name
-from ..utils.config_loader import load_config
 from jinja2 import Template
 
 def _write_metadata_file(book_root: str, book_title: str, author: str, year: str):

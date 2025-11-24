@@ -133,7 +133,6 @@ def process_pdf(
             is_inferred = True
         
         # Pass the config to jerarquia.split_into_chapters
-        print(f"DEBUG: Config in pipeline (before jerarquia): {config['structure']['chapter_folder_name']}") # DEBUG PRINT
         chapters = jerarquia.split_into_chapters(structured_text, toc_entries, config)
 
         # --- Optional Translation ---

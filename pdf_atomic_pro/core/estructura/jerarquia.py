@@ -3,7 +3,6 @@ from typing import List, Dict
 from .indice_detector import TOCEntry, _normalize_title
 from ..limpieza.normalizador import normalize_text
 from collections import Counter # ADDED: Import Counter for font size analysis
-from ..utils.config_loader import load_config
 
 def _find_headers_with_toc(all_structured_lines: List[Dict], toc_entries: List[TOCEntry]) -> List[Dict]:
     """
