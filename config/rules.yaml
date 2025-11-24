@@ -1,0 +1,42 @@
+# Configuration for the PDF Atomic Pro tool
+# This file defines the rules and templates for creating atomic books.
+
+# --- Structure and Naming ---
+structure:
+  book_folder_name: "{year} - {title} - {author}"
+  chapter_folder_name: "Capítulo {chapter_number:02d} - {chapter_title}"
+  atomic_note_name: "{chapter_number}.{note_number} - {note_title}"
+  book_moc_name: "MOC - {title}.md"
+  chapter_moc_name: "MOC - Capítulo {chapter_number:02d} - {chapter_title}.md"
+
+# --- Subtitle Detection Heuristics for Section Splitting ---
+# A line is considered a subtitle if its score exceeds the threshold.
+subtitle_detection:
+  threshold: 3
+  heuristics:
+    # Strong signal if the line is bold and the dominant style is not.
+    bold_vs_not_bold:
+      score: 2
+    # Strong signal if the font size is significantly larger.
+    font_size_increase_strong:
+      multiplier: 1.15
+      score: 2
+    # Weaker signal for a slight size increase.
+    font_size_increase_weak:
+      multiplier: 1.05
+      score: 1
+    # Weaker signal for being a short line (between 1 and 15 words).
+    is_short:
+      score: 1
+    # Weaker signal for not ending in punctuation.
+    ends_like_title:
+      score: 1
+    # Strong signal for matching a numbering pattern (e.g., "1.2.1", "a)").
+    numbering_pattern:
+      regex: |
+        ^\s*(\d+(\.\d+)*|[a-zA-Z]\)|[ivxlcdm]+\.)\s+.*
+      score: 2
+templates:
+  atomic_note: "config/templates/atomic_note_template.md"
+  chapter_moc: "config/templates/chapter_moc_template.md"
+  book_moc: "config/templates/book_moc_template.md"
