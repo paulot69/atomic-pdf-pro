@@ -119,7 +119,7 @@ atomic-pdf-pro/
 ├── requirements.txt
 ├── start_gui.py                    ← Launcher
 └── README.md
-```
+    ```
 
 ---
 
@@ -129,3 +129,37 @@ atomic-pdf-pro/
 2.  **Carga**: La aplicación buscará ese archivo recursivamente en tu biblioteca (`/input` o `LOCAL_INPUT_PATH`) sin importar en qué subcarpeta esté.
 3.  **Procesamiento**: El pipeline extrae texto, detecta estructura, genera notas atómicas y crea el vault Obsidian.
 4.  **Salida**: El resultado aparece en tu carpeta de salida configurada.
+
+---
+
+# 🧪 Pruebas
+
+Para asegurar la estabilidad y el correcto funcionamiento del proyecto, se ha integrado un sistema de pruebas automatizadas utilizando `pytest`.
+
+### 🛠️ Instalación de Dependencias de Pruebas
+
+Asegúrate de tener instaladas las dependencias necesarias para las pruebas:
+
+```bash
+pip install -r requirements.txt
+```
+*(Esto instalará `pytest`, `pytest-cov` para cobertura de código y `pytest-mock` para simular partes del sistema.)*
+
+### ▶️ Ejecutar Pruebas
+
+Para ejecutar todas las pruebas y generar un informe de cobertura de código, abre tu terminal en la raíz del proyecto y ejecuta:
+
+```bash
+pytest
+```
+
+### 🔬 La Primera Prueba: `test_process_pdf_full_pipeline`
+
+Esta prueba, ubicada en `tests/test_pipeline.py`, es una prueba de "extremo a extremo" (end-to-end) del pipeline principal de procesamiento de PDFs. Su objetivo es verificar que todo el flujo central de `pdf_atomic_pro` funciona correctamente:
+
+*   **Simulación de Extracción de Texto:** Utiliza `pytest-mock` para simular la extracción de texto de un PDF. Esto permite que la prueba se ejecute de forma rápida y determinista, sin depender de un archivo PDF real ni de los motores de extracción.
+*   **Generación de Estructura:** Verifica que el proceso de estructuración (detección de capítulos, generación de notas atómicas y Mapas de Contenido o MOCs) se realice de forma adecuada.
+*   **Verificación de Salida:** Comprueba que la carpeta del vault de Obsidian se crea correctamente en un directorio temporal y que contiene los archivos esperados (MOCs principales, carpetas de capítulos y notas atómicas).
+
+**Nota sobre `tests/assets/sample.pdf`:** Para que las pruebas sean completamente representativas del proceso de extracción real, se recomienda reemplazar el archivo `tests/assets/sample.pdf` (inicialmente vacío) por un PDF pequeño pero real (por ejemplo, de 1-2 páginas). Esto permitirá que las pruebas también validen la etapa inicial de extracción de texto/OCR.
+
