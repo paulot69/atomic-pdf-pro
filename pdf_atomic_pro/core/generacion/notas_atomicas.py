@@ -5,7 +5,7 @@ from typing import List, Dict
 from .utils import _sanitize_title_for_filename, get_main_moc_name
 from .yaml_builder import generate_frontmatter
 from .summarizer import generate_fallback_summary
-from ai_connector import MetadataEngine
+from pdf_atomic_pro.core.ai_connector import MetadataEngine
 
 def _generate_navigation_footer(atomic_note: Dict, book_title: str) -> str:
     """Generates the standardized navigation footer for an atomic note."""
